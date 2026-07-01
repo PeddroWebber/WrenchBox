@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: wrenchbox-db
+    environment:
+      POSTGRES_DB: wrenchbox
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d wrenchbox"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    container_name: wrenchbox-api
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Default: Host=db;Port=5432;Database=wrenchbox;Username=postgres;Password=postgres
+      Jwt__Secret: WrenchBox_Docker_Secret_Key_Min_32_Chars!
+      Jwt__Issuer: WrenchBox
+      Jwt__Audience: WrenchBox.Admin
+      Jwt__ExpiryMinutes: 60
+
+volumes:
+  pgdata:
