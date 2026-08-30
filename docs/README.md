@@ -12,6 +12,7 @@ Documentação técnica e de domínio do **WrenchBox** — Sistema Integrado de 
 | [Modelagem DDD](modelagem-ddd.md) | Bounded contexts, camadas e diagramas |
 | [Event Storming — Estoque](event-storming-estoque.md) | Fluxo de gestão de peças e insumos |
 | [API — Endpoints](api-endpoints.md) | Referência de todos os endpoints REST |
+| [Collection Postman](WrenchBox.postman_collection.json) | Collection das APIs |
 | [Análise de Vulnerabilidades](analise-vulnerabilidades.md) | Revisão de segurança do MVP |
 
 ## Arquitetura em camadas

@@ -17,15 +17,22 @@ public static class DatabaseSeeder
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<WrenchBoxDbContext>>();
         var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
         var useLightSeed = configuration.GetValue<bool>("Seed:UseLightSeed");
+        var seedEnabled = configuration.GetValue("Seed:Enabled", false);
 
         await context.Database.MigrateAsync();
+
+        if (!seedEnabled)
+        {
+            logger.LogInformation("Demo seed is disabled. Migrations were applied.");
+            return;
+        }
 
         if (!await context.AdminUsers.AnyAsync())
         {
             var admin = AdminUser.Create("admin@wrenchbox.local", passwordHasher.Hash("Admin@123"));
             await context.AdminUsers.AddAsync(admin);
             await context.SaveChangesAsync();
-            logger.LogInformation("Administrador padrão criado: admin@wrenchbox.local");
+            logger.LogInformation("Default administrator created: admin@wrenchbox.local");
         }
 
         await BulkDataSeeder.SeedAsync(context, logger, useLightSeed);

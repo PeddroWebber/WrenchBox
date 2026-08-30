@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wrenchbox-api
+  namespace: wrenchbox
+  labels:
+    app: wrenchbox-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wrenchbox-api
+  template:
+    metadata:
+      labels:
+        app: wrenchbox-api
+    spec:
+      containers:
+        - name: api
+          image: wrenchbox:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: wrenchbox-config
+            - secretRef:
+                name: wrenchbox-secret
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wrenchbox-api
+  namespace: wrenchbox
+spec:
+  type: NodePort
+  selector:
+    app: wrenchbox-api
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30080

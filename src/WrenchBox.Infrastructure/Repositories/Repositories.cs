@@ -193,18 +193,32 @@ public class WorkOrderRepository : IWorkOrderRepository
             .Include(w => w.PartItems)
             .FirstOrDefaultAsync(w => w.TrackingToken == trackingToken, cancellationToken);
 
-    public async Task<(IReadOnlyList<WorkOrder> Items, int TotalCount)> GetPagedAsync(int page, int pageSize, WorkOrderStatus? status, Guid? customerId, CancellationToken cancellationToken = default)
+    public async Task<(IReadOnlyList<WorkOrder> Items, int TotalCount)> GetPagedAsync(
+        int page,
+        int pageSize,
+        WorkOrderStatus? status,
+        Guid? customerId,
+        bool includeClosed = false,
+        CancellationToken cancellationToken = default)
     {
         var query = WithIncludes();
 
         if (status.HasValue)
             query = query.Where(w => w.Status == status.Value);
+        else if (!includeClosed)
+            query = query.Where(w => w.Status != WorkOrderStatus.Completed && w.Status != WorkOrderStatus.Delivered);
 
         if (customerId.HasValue)
             query = query.Where(w => w.CustomerId == customerId.Value);
 
         var total = await query.CountAsync(cancellationToken);
-        var items = await query.OrderByDescending(w => w.CreatedAt)
+        var items = await query
+            .OrderBy(w =>
+                w.Status == WorkOrderStatus.InExecution ? 0 :
+                w.Status == WorkOrderStatus.AwaitingApproval ? 1 :
+                w.Status == WorkOrderStatus.InDiagnosis ? 2 :
+                w.Status == WorkOrderStatus.Received ? 3 : 4)
+            .ThenBy(w => w.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);

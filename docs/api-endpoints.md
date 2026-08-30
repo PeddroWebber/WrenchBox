@@ -245,14 +245,17 @@ Base: `/work-orders` 🔐
 
 ### `GET /work-orders`
 
+Lista operacional da oficina. **Exclui logicamente** OS `Completed` (Finalizada) e `Delivered` (Entregue). Ordena por fila: Execução > Aguardando Aprovação > Diagnóstico > Recebida e, em empate, **mais antigas primeiro**.
+
 | Query | Tipo | Padrão | Descrição |
 |-------|------|--------|-----------|
 | `page` | int | 1 | Página |
 | `pageSize` | int | 20 | Itens por página |
-| `status` | WorkOrderStatus | — | Filtrar por status |
+| `status` | WorkOrderStatus | — | Filtrar por status (inclui fechadas se informado) |
 | `customerId` | guid | — | Filtrar por cliente |
+| `includeClosed` | bool | false | Inclui Finalizada e Entregue |
 
-**Valores de status:** `Received`, `InDiagnosis`, `AwaitingApproval`, `InExecution`, `Completed`, `Delivered`
+**Valores de status / `statusLabel`:** `Received` Recebida, `InDiagnosis` Diagnóstico, `AwaitingApproval` Aguardando Aprovação, `InExecution` Execução, `Completed` Finalizada, `Delivered` Entregue
 
 ---
 
@@ -280,7 +283,24 @@ Abre nova OS (cria cliente/veículo se necessário).
 | `parts` | array | Não | `{ partId, quantity }` |
 | `notes` | string | Não | Observações |
 
-**Resposta 201:** `WorkOrderDto` com status `Received` e `totalAmount` calculado.
+**Resposta 201:** `WorkOrderDto` com `id` (identificador único), `orderNumber`, status `Received` e `totalAmount` calculado.
+
+---
+
+### `GET /work-orders/{id}/status`
+
+Consulta enxuta da situação atual.
+
+**Resposta 200:**
+
+```json
+{
+  "id": "guid",
+  "orderNumber": "WO-2026-00001",
+  "status": "Received",
+  "statusLabel": "Recebida"
+}
+```
 
 ---
 
@@ -308,7 +328,7 @@ Envia orçamento ao cliente.
 }
 ```
 
-Dispara notificação via `IBudgetNotificationService`.
+Dispara e-mail SMTP (MailHog no ambiente local) com links de aprovação e recusa.
 
 ---
 
@@ -359,6 +379,46 @@ Cliente aprova orçamento.
 
 ---
 
+### `POST /tracking/work-orders/reject`
+
+Cliente recusa o orçamento. A OS volta para `InDiagnosis` (Diagnóstico) para revisão.
+
+**Header obrigatório:** `X-Tracking-Token`
+
+---
+
+### `POST /tracking/work-orders/decision`
+
+Notificação externa unificada de aprovação ou recusa.
+
+**Header obrigatório:** `X-Tracking-Token`  
+**Body:** `{ "approved": true | false }`
+
+`GET /tracking/work-orders/decision?approved=true&token=...` é o link clicável do e-mail (retorna HTML).
+
+---
+
+## Webhooks (e-mail / ferramenta externa)
+
+### `POST /webhooks/work-order-status` 🔓 (secret)
+
+Atualiza o status da OS a partir de uma ferramenta externa (ex.: clique em e-mail).
+
+**Header obrigatório:** `X-Webhook-Secret`  
+**Body:** `{ "workOrderId": "guid", "action": "start-diagnosis" | "complete" | "deliver" }`
+
+---
+
+## Saúde
+
+| Endpoint | Auth | Uso |
+|----------|------|-----|
+| `GET /health` | 🔓 | Liveness (K8s) |
+| `GET /health/ready` | 🔓 | Readiness (PostgreSQL) |
+| `GET /api/v1/diagnostics/load` | 🔓 | Carga sintética para demonstrar HPA |
+
+---
+
 ## Métricas
 
 Base: `/metrics` 🔐
@@ -396,10 +456,14 @@ Calculado com base em `ExecutionStartedAt` e `CompletedAt`.
 | `/parts/{id}/stock` | — | — | — | ✅ | — |
 | `/work-orders` | ✅ lista | ✅ | — | — | — |
 | `/work-orders/{id}` | ✅ | — | — | — | — |
+| `/work-orders/{id}/status` | ✅ | — | — | — | — |
 | `/work-orders/{id}/start-diagnosis` | — | ✅ | — | — | — |
 | `/work-orders/{id}/send-budget` | — | ✅ | — | — | — |
 | `/work-orders/{id}/complete` | — | ✅ | — | — | — |
 | `/work-orders/{id}/deliver` | — | ✅ | — | — | — |
 | `/tracking/work-orders` | ✅ | — | — | — | — |
 | `/tracking/work-orders/approve` | — | ✅ | — | — | — |
+| `/tracking/work-orders/reject` | — | ✅ | — | — | — |
+| `/tracking/work-orders/decision` | ✅ e-mail | ✅ | — | — | — |
+| `/webhooks/work-order-status` | — | ✅ | — | — | — |
 | `/metrics/average-execution-time` | ✅ | — | — | — | — |

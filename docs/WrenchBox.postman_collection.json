@@ -1,0 +1,287 @@
+{
+  "info": {
+    "name": "WrenchBox API",
+    "description": "Collection: auth, cadastros, OS, tracking, webhook, health e HPA.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "token", "value": "" },
+    { "key": "trackingToken", "value": "" },
+    { "key": "workOrderId", "value": "" },
+    { "key": "serviceId", "value": "" },
+    { "key": "partId", "value": "" },
+    { "key": "webhookSecret", "value": "dev-webhook-secret" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.token) pm.collectionVariables.set('token', body.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@wrenchbox.local\",\n  \"password\": \"Admin@123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/login"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Catalog",
+      "item": [
+        {
+          "name": "List services",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const items = pm.response.json().items || [];",
+                  "if (items.length) pm.collectionVariables.set('serviceId', items[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/v1/services?pageSize=50"
+          }
+        },
+        {
+          "name": "List parts",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const items = pm.response.json().items || [];",
+                  "if (items.length) pm.collectionVariables.set('partId', items[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/v1/parts?pageSize=50"
+          }
+        },
+        {
+          "name": "List customers",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/v1/customers"
+          }
+        },
+        {
+          "name": "List vehicles",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/v1/vehicles"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Work orders",
+      "item": [
+        {
+          "name": "Open OS",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.id) pm.collectionVariables.set('workOrderId', body.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerDocument\": \"39053344705\",\n  \"customerName\": \"João Silva\",\n  \"customerEmail\": \"joao@test.com\",\n  \"customerPhone\": \"11999999999\",\n  \"vehiclePlate\": \"ABC1D23\",\n  \"vehicleBrand\": \"Toyota\",\n  \"vehicleModel\": \"Corolla\",\n  \"vehicleYear\": 2020,\n  \"services\": [{ \"serviceId\": \"{{serviceId}}\", \"quantity\": 1 }],\n  \"parts\": [{ \"partId\": \"{{partId}}\", \"quantity\": 1 }],\n  \"notes\": \"Postman — abertura de OS\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/work-orders"
+          }
+        },
+        {
+          "name": "List OS (operational queue)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/v1/work-orders?pageSize=50"
+          }
+        },
+        {
+          "name": "Get OS by id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}"
+          }
+        },
+        {
+          "name": "Get OS status",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}/status"
+          }
+        },
+        {
+          "name": "Start diagnosis",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}/start-diagnosis"
+          }
+        },
+        {
+          "name": "Send budget (e-mail)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.trackingToken) pm.collectionVariables.set('trackingToken', body.trackingToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}/send-budget"
+          }
+        },
+        {
+          "name": "Complete OS",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}/complete"
+          }
+        },
+        {
+          "name": "Deliver OS",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/v1/work-orders/{{workOrderId}}/deliver"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tracking",
+      "item": [
+        {
+          "name": "Get tracking status",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Tracking-Token", "value": "{{trackingToken}}" }],
+            "url": "{{baseUrl}}/api/v1/tracking/work-orders"
+          }
+        },
+        {
+          "name": "Approve budget",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Tracking-Token", "value": "{{trackingToken}}" }],
+            "url": "{{baseUrl}}/api/v1/tracking/work-orders/approve"
+          }
+        },
+        {
+          "name": "Reject budget",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Tracking-Token", "value": "{{trackingToken}}" }],
+            "url": "{{baseUrl}}/api/v1/tracking/work-orders/reject"
+          }
+        },
+        {
+          "name": "Decision (external notification)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Tracking-Token", "value": "{{trackingToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"approved\": true }"
+            },
+            "url": "{{baseUrl}}/api/v1/tracking/work-orders/decision"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhook and health",
+      "item": [
+        {
+          "name": "Webhook update status",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Webhook-Secret", "value": "{{webhookSecret}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workOrderId\": \"{{workOrderId}}\",\n  \"action\": \"start-diagnosis\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/webhooks/work-order-status"
+          }
+        },
+        {
+          "name": "Health",
+          "request": { "method": "GET", "url": "{{baseUrl}}/health" }
+        },
+        {
+          "name": "Ready",
+          "request": { "method": "GET", "url": "{{baseUrl}}/health/ready" }
+        },
+        {
+          "name": "HPA load",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/diagnostics/load?iterations=750000" }
+        },
+        {
+          "name": "Average execution time",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/v1/metrics/average-execution-time"
+          }
+        }
+      ]
+    }
+  ]
+}

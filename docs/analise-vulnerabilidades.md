@@ -63,10 +63,10 @@ Na primeira execução, cria `admin@wrenchbox.local` / `Admin@123`. Em ambiente 
 
 | # | Achado | Detalhe |
 |---|--------|---------|
-| 3 | Swagger sempre habilitado | `Program.cs` — sem guarda `IsDevelopment()`; expõe schema completo da API em produção |
+| 3 | Swagger em produção (mitigado) | Swagger só sobe em Development ou com `Swagger:Enabled=true` (demo K8s) |
 | 4 | Docker em ambiente Development | `docker-compose.yml` — `ASPNETCORE_ENVIRONMENT: Development` desativa defaults de produção |
 | 5 | Sem HTTPS/TLS | API roda apenas em HTTP (porta 8080); JWT e credenciais trafegam em cleartext |
-| 6 | Token de rastreamento nos logs | `LoggingBudgetNotificationService.cs` registra o token em plaintext |
+| 6 | Token de rastreamento no e-mail | Links de aprovação/recusa carregam o token na query string (necessário para o clique no MailHog) |
 | 7 | Aprovação anônima de orçamento | Header `X-Tracking-Token` permite aprovar orçamento e baixar estoque sem autenticação adicional; token não expira |
 | 8 | Sem rate limiting | Login e endpoints de rastreamento vulneráveis a brute force e abuso |
 | 9 | JWT simétrico sem revogação | Comprometimento da chave = forjar qualquer token; sem blacklist |

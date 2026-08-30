@@ -21,9 +21,12 @@ public class WorkOrdersController : ControllerBase
         [FromQuery] int pageSize = 20,
         [FromQuery] WorkOrderStatus? status = null,
         [FromQuery] Guid? customerId = null,
+        [FromQuery] bool includeClosed = false,
         CancellationToken cancellationToken = default)
     {
-        var result = await _mediator.Send(new GetWorkOrdersQuery(page, pageSize, status, customerId), cancellationToken);
+        var result = await _mediator.Send(
+            new GetWorkOrdersQuery(page, pageSize, status, customerId, includeClosed),
+            cancellationToken);
         return Ok(result);
     }
 
@@ -31,6 +34,13 @@ public class WorkOrdersController : ControllerBase
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
         var result = await _mediator.Send(new GetWorkOrderByIdQuery(id), cancellationToken);
+        return Ok(result);
+    }
+
+    [HttpGet("{id:guid}/status")]
+    public async Task<IActionResult> GetStatus(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(new GetWorkOrderStatusQuery(id), cancellationToken);
         return Ok(result);
     }
 

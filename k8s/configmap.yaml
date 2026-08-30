@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wrenchbox-config
+  namespace: wrenchbox
+data:
+  ASPNETCORE_ENVIRONMENT: "Production"
+  Jwt__Issuer: "WrenchBox"
+  Jwt__Audience: "WrenchBox.Admin"
+  Jwt__ExpiryMinutes: "60"
+  Smtp__Host: "mailhog"
+  Smtp__Port: "1025"
+  Smtp__From: "WrenchBox <noreply@wrenchbox.local>"
+  Smtp__UseSsl: "false"
+  Smtp__PublicBaseUrl: "http://localhost:8080"
+  Swagger__Enabled: "true"
+  Seed__Enabled: "true"

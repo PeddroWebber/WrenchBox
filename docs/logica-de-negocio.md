@@ -180,4 +180,4 @@ stateDiagram-v2
 
 ## Notificação de orçamento
 
-Implementação padrão: `LoggingBudgetNotificationService` — registra no log da API simulando envio de e-mail. Interface `IBudgetNotificationService` permite substituição por SMTP/provedor real sem alterar domínio.
+Implementação padrão: `SmtpNotificationService` (MailHog no ambiente local). A porta `INotificationService` permite trocar o provedor sem alterar o domínio.

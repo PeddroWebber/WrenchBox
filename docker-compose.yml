@@ -3,9 +3,9 @@ services:
     image: postgres:16-alpine
     container_name: wrenchbox-db
     environment:
-      POSTGRES_DB: wrenchbox
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-wrenchbox}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       - "5432:5432"
     volumes:
@@ -16,21 +16,37 @@ services:
       timeout: 5s
       retries: 10
 
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: wrenchbox-mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
   api:
     build: .
+    image: wrenchbox:latest
     container_name: wrenchbox-api
     ports:
       - "8080:8080"
     depends_on:
       db:
         condition: service_healthy
+      mailhog:
+        condition: service_started
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__Default: Host=db;Port=5432;Database=wrenchbox;Username=postgres;Password=postgres
-      Jwt__Secret: WrenchBox_Docker_Secret_Key_Min_32_Chars!
-      Jwt__Issuer: WrenchBox
-      Jwt__Audience: WrenchBox.Admin
-      Jwt__ExpiryMinutes: 60
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ConnectionStrings__Default: Host=db;Port=5432;Database=${POSTGRES_DB:-wrenchbox};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
+      Jwt__Secret: ${JWT_SECRET:-WrenchBox_Docker_Secret_Key_Min_32_Chars!}
+      Jwt__Issuer: ${JWT_ISSUER:-WrenchBox}
+      Jwt__Audience: ${JWT_AUDIENCE:-WrenchBox.Admin}
+      Jwt__ExpiryMinutes: ${JWT_EXPIRY_MINUTES:-60}
+      Smtp__Host: mailhog
+      Smtp__Port: 1025
+      Smtp__From: WrenchBox <noreply@wrenchbox.local>
+      Smtp__UseSsl: "false"
+      Smtp__PublicBaseUrl: ${PUBLIC_BASE_URL:-http://localhost:8080}
+      Webhook__Secret: ${WEBHOOK_SECRET:-dev-webhook-secret}
 
 volumes:
   pgdata:

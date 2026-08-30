@@ -1,0 +1,144 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  DOTNET_VERSION: "8.0.x"
+  IMAGE_NAME: wrenchbox
+  REGISTRY: ghcr.io
+  TF_IN_AUTOMATION: "true"
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          cache: true
+          cache-dependency-path: "**/*.csproj"
+
+      - name: Restore
+        run: dotnet restore WrenchBox.sln
+
+      - name: Build
+        run: dotnet build WrenchBox.sln --no-restore -c Release
+
+      - name: Test
+        run: dotnet test WrenchBox.sln --no-build -c Release --verbosity normal
+
+  terraform:
+    name: Terraform validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform init
+        working-directory: infra
+        run: terraform init -backend=false
+
+      - name: Terraform validate
+        working-directory: infra
+        run: terraform validate
+
+  image:
+    name: Build and push Docker image
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Image metadata
+        id: meta
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}"
+          IMAGE=$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
+
+  deploy:
+    name: Deploy to Kind
+    needs: [test, terraform, image]
+    if: always() && needs.test.result == 'success' && needs.terraform.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create Kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: wrenchbox
+          config: infra/kind-config.yaml
+          wait: 120s
+
+      - name: Install metrics-server
+        run: kubectl apply -f infra/metrics-server.yaml
+
+      - name: Build local image
+        run: docker build -t wrenchbox:latest .
+
+      - name: Load image into Kind
+        run: kind load docker-image wrenchbox:latest --name wrenchbox
+
+      - name: Apply namespace, ConfigMap and Secret
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+          kubectl apply -f k8s/configmap.yaml
+          kubectl apply -f k8s/secret.yaml
+
+      - name: Deploy do banco de dados
+        run: kubectl apply -f k8s/postgres-deployment.yaml
+
+      - name: Wait for PostgreSQL
+        run: kubectl -n wrenchbox rollout status deployment/postgres --timeout=180s
+
+      - name: Aplicar manifestos da API, MailHog e HPA
+        run: |
+          kubectl apply -f k8s/mailhog-deployment.yaml
+          kubectl apply -f k8s/api-deployment.yaml
+          kubectl apply -f k8s/hpa.yaml
+
+      - name: Wait for API
+        run: kubectl -n wrenchbox rollout status deployment/wrenchbox-api --timeout=180s
+
+      - name: Smoke health check
+        run: |
+          kubectl -n wrenchbox wait --for=condition=ready pod -l app=wrenchbox-api --timeout=180s
+          API_POD=$(kubectl -n wrenchbox get pod -l app=wrenchbox-api -o jsonpath='{.items[0].metadata.name}')
+          kubectl -n wrenchbox exec "$API_POD" -- curl -fsS http://localhost:8080/health
+          kubectl -n wrenchbox get deploy,svc,hpa,secret,configmap

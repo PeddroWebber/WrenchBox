@@ -1,106 +1,128 @@
 # WrenchBox API
 
-Backend MVP para gestão de oficinas mecânicas: ordens de serviço, clientes, veículos, catálogo de serviços, estoque de peças, APIs administrativas com JWT e acompanhamento pelo cliente via token de rastreamento.
+Backend para gestão de oficinas mecânicas: ordens de serviço, clientes, veículos, catálogo, estoque e acompanhamento do cliente. Usa **Clean Architecture**, **testes automatizados**, **e-mail (MailHog)**, **Docker**, **Kubernetes**, **Terraform (Kind local)** e **CI/CD**.
 
 ## Arquitetura
 
-Monólito em camadas com Domain-Driven Design (DDD):
+Clean Architecture em camadas (o Domain não depende de Infrastructure):
 
-| Projeto | Responsabilidade |
-|---------|------------------|
-| `WrenchBox.Domain` | Entidades, value objects, regras de negócio |
-| `WrenchBox.Application` | Handlers MediatR, DTOs, FluentValidation |
-| `WrenchBox.Infrastructure` | EF Core, PostgreSQL, JWT, repositórios |
-| `WrenchBox.Api` | Controllers REST, Swagger, middleware |
+| Projeto | Papel |
+|---------|--------|
+| `WrenchBox.Domain` | Entidades, value objects, regras e portas de persistência |
+| `WrenchBox.Application` | Casos de uso (MediatR), DTOs, validação |
+| `WrenchBox.Infrastructure` | Adaptadores: EF Core, PostgreSQL, JWT, SMTP |
+| `WrenchBox.Api` | Adaptador HTTP: controllers, Swagger, health, webhooks |
 
-Documentação de domínio, Event Storming, endpoints e segurança: **[docs/](docs/README.md)**
+```mermaid
+flowchart LR
+  subgraph clients [Clientes]
+    Admin[Admin JWT]
+    Customer[Cliente / e-mail]
+    Pipeline[GitHub Actions]
+  end
 
-## Por que PostgreSQL?
+  subgraph cluster [Kind / Kubernetes]
+    Api[API Deployment + HPA]
+    Pg[PostgreSQL]
+    Mail[MailHog]
+    Api --> Pg
+    Api --> Mail
+  end
 
-Integridade relacional entre clientes, veículos e ordens de serviço; transações ACID na aprovação de orçamento com baixa de estoque; suporte maduro ao EF Core via Npgsql; execução simples no Docker.
+  Admin --> Api
+  Customer --> Api
+  Customer --> Mail
+  Pipeline -->|kubectl apply| Api
+```
 
-## Pré-requisitos
+Fluxo de deploy: testes → imagem Docker → Kind no CI (ou Terraform local) → apply de `/k8s` (banco + API + HPA).
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/download)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (para `docker compose` e testes de integração)
+## APIs de ordem de serviço
 
-## Execução
+| Requisito | Endpoint |
+|-----------|----------|
+| Abertura de OS | `POST /api/v1/work-orders` — devolve `id` e `orderNumber` |
+| Consulta de status | `GET /api/v1/work-orders/{id}/status` — `status` + `statusLabel` em português |
+| Aprovação/recusa de orçamento | `POST /api/v1/tracking/work-orders/decision` `{ "approved": true\|false }` |
+| Listagem operacional | `GET /api/v1/work-orders` — Execução > Aguardando Aprovação > Diagnóstico > Recebida; mais antigas primeiro; exclui Finalizada/Entregue |
+| Status via e-mail | SMTP + MailHog; links no e-mail; `POST /api/v1/webhooks/work-order-status` |
 
-### Docker (recomendado)
+Collection: [docs/WrenchBox.postman_collection.json](docs/WrenchBox.postman_collection.json)  
+Swagger (local): http://localhost:8080/swagger  
+Referência: [docs/api-endpoints.md](docs/api-endpoints.md)
+
+## Execução local
+
+Pré-requisitos: [.NET 8 SDK](https://dotnet.microsoft.com/download) e [Docker Desktop](https://www.docker.com/products/docker-desktop/).
 
 ```bash
+cp .env.example .env
 docker compose up --build
 ```
 
 - API: http://localhost:8080
 - Swagger: http://localhost:8080/swagger
-
-Credenciais do administrador (desenvolvimento): `admin@wrenchbox.local` / `Admin@123`
-
-Na primeira inicialização, o banco recebe dados de demonstração (catálogo, clientes, veículos e ordens de serviço). O seed é idempotente; para recarregar, use `docker compose down -v` antes de subir novamente.
-
-### Local
+- MailHog: http://localhost:8025
+- Admin: `admin@wrenchbox.local` / `Admin@123`
 
 ```bash
-docker compose up db -d
+docker compose up db mailhog -d
 dotnet run --project src/WrenchBox.Api
 ```
 
-Swagger: http://localhost:5000/swagger
+Swagger em http://localhost:5000/swagger.
 
-## Variáveis de ambiente
+## Kubernetes
 
-| Variável | Descrição | Padrão (docker-compose) |
-|----------|-----------|-------------------------|
-| `ConnectionStrings__Default` | String de conexão PostgreSQL | `Host=db;...` |
-| `Jwt__Secret` | Chave de assinatura JWT (mín. 32 caracteres) | definida no compose |
-| `Jwt__Issuer` | Emissor do token | `WrenchBox` |
-| `Jwt__Audience` | Audiência do token | `WrenchBox.Admin` |
-| `Jwt__ExpiryMinutes` | Tempo de vida do token | `60` |
-
-## API
-
-Dois perfis de acesso:
-
-- **Administrativo** — JWT Bearer: auth, CRUDs, ciclo de vida da OS, estoque e métricas
-- **Cliente** — header `X-Tracking-Token`: consulta e aprovação de orçamento
-
-Referência completa: **[docs/api-endpoints.md](docs/api-endpoints.md)**
-
-### Fluxo de status da ordem de serviço
-
-```
-Received → InDiagnosis → AwaitingApproval → InExecution → Completed → Delivered
+```bash
+docker build -t wrenchbox:latest .
+kind create cluster --name wrenchbox --config infra/kind-config.yaml
+kind load docker-image wrenchbox:latest --name wrenchbox
+kubectl apply -k k8s
+kubectl -n wrenchbox get deploy,svc,hpa
 ```
 
-O token de rastreamento é gerado ao enviar o orçamento (`POST /api/v1/work-orders/{id}/send-budget`). A aprovação pelo cliente dispara a baixa automática de estoque.
+API em http://localhost:8080 (NodePort 30080). MailHog em http://localhost:8025.
+
+### HPA
+
+```bash
+kubectl -n wrenchbox get hpa -w
+# em outro terminal
+hey -z 60s -c 20 http://localhost:8080/api/v1/diagnostics/load
+```
+
+## Terraform
+
+Provisiona o cluster Kind, o metrics-server e o PostgreSQL. Detalhes em [infra/README.md](infra/README.md).
+
+```bash
+cd infra
+terraform init
+terraform apply
+cd ..
+docker build -t wrenchbox:latest .
+kind load docker-image wrenchbox:latest --name wrenchbox
+kubectl apply -k k8s
+```
+
+## CI/CD
+
+Pipeline em [.github/workflows/ci-cd.yml](.github/workflows/ci-cd.yml):
+
+1. `dotnet restore` / `build` / `test`
+2. `terraform init` + `terraform validate`
+3. Build e push da imagem para GHCR (`main`)
+4. Kind no runner: deploy do banco, apply dos manifestos (API/HPA), smoke em `/health`
+
+## Produção (hardening)
+
+Em `Production`, seed e Swagger ficam **desligados** por padrão (`Seed:Enabled`, `Swagger:Enabled`). O ambiente Kind de demonstração religa os dois via ConfigMap. Login tem rate limit (10 tentativas/minuto). A API envia `X-Content-Type-Options`, `X-Frame-Options` e `X-Request-Id`.
 
 ## Testes
 
 ```bash
 dotnet test
-dotnet test --collect:"XPlat Code Coverage"
 ```
 
-- Testes unitários em `WrenchBox.Domain.Tests` e `WrenchBox.Application.Tests`
-- Testes de integração com Testcontainers (PostgreSQL); ignorados se Docker indisponível
-- Meta de cobertura: **≥ 80%** de linhas em Domain e Application
-
-## Estrutura da solução
-
-```
-src/
-  WrenchBox.Domain/
-  WrenchBox.Application/
-  WrenchBox.Infrastructure/
-  WrenchBox.Api/
-tests/
-  WrenchBox.Domain.Tests/
-  WrenchBox.Application.Tests/
-  WrenchBox.Integration.Tests/
-Dockerfile
-docker-compose.yml
-docs/
-```
-
-Migrations EF Core são aplicadas automaticamente na inicialização da API.
+Unitários (Domain/Application) e integração com Testcontainers (PostgreSQL). Meta: ≥ 80% de linhas em Domain e Application.

@@ -35,6 +35,20 @@ cov-*/
 .env.*
 !.env.example
 
+# Terraform
+.terraform/
+*.tfvars
+!*.tfvars.example
+*.tfstate
+*.tfstate.*
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
 # OS
 .DS_Store
 Thumbs.db

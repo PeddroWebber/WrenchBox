@@ -12,6 +12,8 @@ public record WorkOrderServiceItemDto(Guid ServiceId, string ServiceName, int Qu
 public record WorkOrderPartItemDto(Guid PartId, string PartName, string PartSku, int Quantity, decimal UnitPrice, decimal TotalPrice);
 public record WorkOrderStatusHistoryDto(WorkOrderStatus FromStatus, WorkOrderStatus ToStatus, DateTime ChangedAt, string? ChangedBy);
 
+public record WorkOrderStatusDto(Guid Id, string OrderNumber, WorkOrderStatus Status, string StatusLabel);
+
 public record WorkOrderDto(
     Guid Id,
     string OrderNumber,
@@ -20,6 +22,7 @@ public record WorkOrderDto(
     Guid VehicleId,
     string VehiclePlate,
     WorkOrderStatus Status,
+    string StatusLabel,
     decimal TotalAmount,
     string? Notes,
     string? TrackingToken,
@@ -31,6 +34,7 @@ public record WorkOrderDto(
 public record TrackingWorkOrderDto(
     string OrderNumber,
     WorkOrderStatus Status,
+    string StatusLabel,
     decimal TotalAmount,
     IReadOnlyList<WorkOrderServiceItemDto> Services,
     IReadOnlyList<WorkOrderPartItemDto> Parts,
@@ -65,6 +69,7 @@ public static class Mappers
             wo.VehicleId,
             wo.Vehicle?.Plate ?? string.Empty,
             wo.Status,
+            wo.Status.ToPortuguese(),
             wo.TotalAmount,
             wo.Notes,
             wo.TrackingToken,
@@ -74,10 +79,14 @@ public static class Mappers
             wo.CreatedAt);
     }
 
+    public static WorkOrderStatusDto ToStatusDto(this WorkOrder wo) =>
+        new(wo.Id, wo.OrderNumber, wo.Status, wo.Status.ToPortuguese());
+
     public static TrackingWorkOrderDto ToTrackingDto(this WorkOrder wo) =>
         new(
             wo.OrderNumber,
             wo.Status,
+            wo.Status.ToPortuguese(),
             wo.TotalAmount,
             wo.ServiceItems.Select(i => new WorkOrderServiceItemDto(i.ServiceId, i.ServiceName, i.Quantity, i.UnitPrice, i.TotalPrice)).ToList(),
             wo.PartItems.Select(i => new WorkOrderPartItemDto(i.PartId, i.PartName, i.PartSku, i.Quantity, i.UnitPrice, i.TotalPrice)).ToList(),

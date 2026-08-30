@@ -118,6 +118,14 @@ public class WorkOrder : Entity
         TransitionTo(WorkOrderStatus.InExecution, changedBy);
     }
 
+    public void RejectBudget(string? changedBy = null)
+    {
+        EnsureStatus(WorkOrderStatus.AwaitingApproval, nameof(RejectBudget));
+        TrackingToken = null;
+        BudgetSentAt = null;
+        TransitionTo(WorkOrderStatus.InDiagnosis, changedBy);
+    }
+
     public void Complete(string? changedBy = null)
     {
         EnsureStatus(WorkOrderStatus.InExecution, nameof(Complete));

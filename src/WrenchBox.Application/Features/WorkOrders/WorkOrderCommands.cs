@@ -28,11 +28,18 @@ public record CreateWorkOrderCommand(
     string? Notes) : IRequest<WorkOrderDto>;
 
 public record GetWorkOrderByIdQuery(Guid Id) : IRequest<WorkOrderDto>;
-public record GetWorkOrdersQuery(int Page = 1, int PageSize = 20, WorkOrderStatus? Status = null, Guid? CustomerId = null) : IRequest<PagedResult<WorkOrderDto>>;
+public record GetWorkOrderStatusQuery(Guid Id) : IRequest<WorkOrderStatusDto>;
+public record GetWorkOrdersQuery(
+    int Page = 1,
+    int PageSize = 20,
+    WorkOrderStatus? Status = null,
+    Guid? CustomerId = null,
+    bool IncludeClosed = false) : IRequest<PagedResult<WorkOrderDto>>;
 public record StartDiagnosisCommand(Guid WorkOrderId) : IRequest<WorkOrderDto>;
 public record SendBudgetCommand(Guid WorkOrderId) : IRequest<SendBudgetResponseDto>;
 public record CompleteWorkOrderCommand(Guid WorkOrderId) : IRequest<WorkOrderDto>;
 public record DeliverWorkOrderCommand(Guid WorkOrderId) : IRequest<WorkOrderDto>;
+public record UpdateWorkOrderStatusFromWebhookCommand(Guid WorkOrderId, string Action) : IRequest<WorkOrderDto>;
 
 public class CreateWorkOrderCommandValidator : AbstractValidator<CreateWorkOrderCommand>
 {
@@ -163,6 +170,20 @@ public class GetWorkOrderByIdQueryHandler : IRequestHandler<GetWorkOrderByIdQuer
     }
 }
 
+public class GetWorkOrderStatusQueryHandler : IRequestHandler<GetWorkOrderStatusQuery, WorkOrderStatusDto>
+{
+    private readonly IWorkOrderRepository _repository;
+
+    public GetWorkOrderStatusQueryHandler(IWorkOrderRepository repository) => _repository = repository;
+
+    public async Task<WorkOrderStatusDto> Handle(GetWorkOrderStatusQuery request, CancellationToken cancellationToken)
+    {
+        var workOrder = await _repository.GetByIdAsync(request.Id, cancellationToken)
+            ?? throw new NotFoundException($"Work order '{request.Id}' not found.");
+        return workOrder.ToStatusDto();
+    }
+}
+
 public class GetWorkOrdersQueryHandler : IRequestHandler<GetWorkOrdersQuery, PagedResult<WorkOrderDto>>
 {
     private readonly IWorkOrderRepository _repository;
@@ -171,7 +192,14 @@ public class GetWorkOrdersQueryHandler : IRequestHandler<GetWorkOrdersQuery, Pag
 
     public async Task<PagedResult<WorkOrderDto>> Handle(GetWorkOrdersQuery request, CancellationToken cancellationToken)
     {
-        var (items, total) = await _repository.GetPagedAsync(request.Page, request.PageSize, request.Status, request.CustomerId, cancellationToken);
+        var (items, total) = await _repository.GetPagedAsync(
+            request.Page,
+            request.PageSize,
+            request.Status,
+            request.CustomerId,
+            request.IncludeClosed,
+            cancellationToken);
+
         return new PagedResult<WorkOrderDto>
         {
             Items = items.Select(w => w.ToDto()).ToList(),
@@ -186,11 +214,16 @@ public class StartDiagnosisCommandHandler : IRequestHandler<StartDiagnosisComman
 {
     private readonly IWorkOrderRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly INotificationService? _notificationService;
 
-    public StartDiagnosisCommandHandler(IWorkOrderRepository repository, IUnitOfWork unitOfWork)
+    public StartDiagnosisCommandHandler(
+        IWorkOrderRepository repository,
+        IUnitOfWork unitOfWork,
+        INotificationService? notificationService = null)
     {
         _repository = repository;
         _unitOfWork = unitOfWork;
+        _notificationService = notificationService;
     }
 
     public async Task<WorkOrderDto> Handle(StartDiagnosisCommand request, CancellationToken cancellationToken)
@@ -203,7 +236,22 @@ public class StartDiagnosisCommandHandler : IRequestHandler<StartDiagnosisComman
 
         workOrder = await _repository.GetByIdAsync(request.WorkOrderId, cancellationToken)
             ?? throw new NotFoundException($"Work order '{request.WorkOrderId}' not found.");
+
+        await NotifyStatusAsync(workOrder, cancellationToken);
         return workOrder.ToDto();
+    }
+
+    private async Task NotifyStatusAsync(WorkOrder workOrder, CancellationToken cancellationToken)
+    {
+        if (_notificationService is null || string.IsNullOrWhiteSpace(workOrder.Customer?.Email))
+            return;
+
+        await _notificationService.SendStatusChangedAsync(
+            workOrder.Customer.Email,
+            workOrder.OrderNumber,
+            workOrder.Status,
+            workOrder.Status.ToPortuguese(),
+            cancellationToken);
     }
 }
 
@@ -211,12 +259,12 @@ public class SendBudgetCommandHandler : IRequestHandler<SendBudgetCommand, SendB
 {
     private readonly IWorkOrderRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
-    private readonly IBudgetNotificationService _notificationService;
+    private readonly INotificationService _notificationService;
 
     public SendBudgetCommandHandler(
         IWorkOrderRepository repository,
         IUnitOfWork unitOfWork,
-        IBudgetNotificationService notificationService)
+        INotificationService notificationService)
     {
         _repository = repository;
         _unitOfWork = unitOfWork;
@@ -254,11 +302,16 @@ public class CompleteWorkOrderCommandHandler : IRequestHandler<CompleteWorkOrder
 {
     private readonly IWorkOrderRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly INotificationService? _notificationService;
 
-    public CompleteWorkOrderCommandHandler(IWorkOrderRepository repository, IUnitOfWork unitOfWork)
+    public CompleteWorkOrderCommandHandler(
+        IWorkOrderRepository repository,
+        IUnitOfWork unitOfWork,
+        INotificationService? notificationService = null)
     {
         _repository = repository;
         _unitOfWork = unitOfWork;
+        _notificationService = notificationService;
     }
 
     public async Task<WorkOrderDto> Handle(CompleteWorkOrderCommand request, CancellationToken cancellationToken)
@@ -271,7 +324,22 @@ public class CompleteWorkOrderCommandHandler : IRequestHandler<CompleteWorkOrder
 
         workOrder = await _repository.GetByIdAsync(request.WorkOrderId, cancellationToken)
             ?? throw new NotFoundException($"Work order '{request.WorkOrderId}' not found.");
+
+        await NotifyStatusAsync(workOrder, cancellationToken);
         return workOrder.ToDto();
+    }
+
+    private async Task NotifyStatusAsync(WorkOrder workOrder, CancellationToken cancellationToken)
+    {
+        if (_notificationService is null || string.IsNullOrWhiteSpace(workOrder.Customer?.Email))
+            return;
+
+        await _notificationService.SendStatusChangedAsync(
+            workOrder.Customer.Email,
+            workOrder.OrderNumber,
+            workOrder.Status,
+            workOrder.Status.ToPortuguese(),
+            cancellationToken);
     }
 }
 
@@ -279,11 +347,16 @@ public class DeliverWorkOrderCommandHandler : IRequestHandler<DeliverWorkOrderCo
 {
     private readonly IWorkOrderRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly INotificationService? _notificationService;
 
-    public DeliverWorkOrderCommandHandler(IWorkOrderRepository repository, IUnitOfWork unitOfWork)
+    public DeliverWorkOrderCommandHandler(
+        IWorkOrderRepository repository,
+        IUnitOfWork unitOfWork,
+        INotificationService? notificationService = null)
     {
         _repository = repository;
         _unitOfWork = unitOfWork;
+        _notificationService = notificationService;
     }
 
     public async Task<WorkOrderDto> Handle(DeliverWorkOrderCommand request, CancellationToken cancellationToken)
@@ -296,6 +369,45 @@ public class DeliverWorkOrderCommandHandler : IRequestHandler<DeliverWorkOrderCo
 
         workOrder = await _repository.GetByIdAsync(request.WorkOrderId, cancellationToken)
             ?? throw new NotFoundException($"Work order '{request.WorkOrderId}' not found.");
+
+        await NotifyStatusAsync(workOrder, cancellationToken);
         return workOrder.ToDto();
+    }
+
+    private async Task NotifyStatusAsync(WorkOrder workOrder, CancellationToken cancellationToken)
+    {
+        if (_notificationService is null || string.IsNullOrWhiteSpace(workOrder.Customer?.Email))
+            return;
+
+        await _notificationService.SendStatusChangedAsync(
+            workOrder.Customer.Email,
+            workOrder.OrderNumber,
+            workOrder.Status,
+            workOrder.Status.ToPortuguese(),
+            cancellationToken);
+    }
+}
+
+public class UpdateWorkOrderStatusFromWebhookCommandHandler
+    : IRequestHandler<UpdateWorkOrderStatusFromWebhookCommand, WorkOrderDto>
+{
+    private readonly IMediator _mediator;
+
+    public UpdateWorkOrderStatusFromWebhookCommandHandler(IMediator mediator) => _mediator = mediator;
+
+    public Task<WorkOrderDto> Handle(UpdateWorkOrderStatusFromWebhookCommand request, CancellationToken cancellationToken)
+    {
+        var action = request.Action.Trim().ToLowerInvariant();
+        return action switch
+        {
+            "start-diagnosis" or "startdiagnosis" =>
+                _mediator.Send(new StartDiagnosisCommand(request.WorkOrderId), cancellationToken),
+            "complete" =>
+                _mediator.Send(new CompleteWorkOrderCommand(request.WorkOrderId), cancellationToken),
+            "deliver" =>
+                _mediator.Send(new DeliverWorkOrderCommand(request.WorkOrderId), cancellationToken),
+            _ => throw new AppException(
+                "Unsupported webhook action. Use start-diagnosis, complete or deliver.")
+        };
     }
 }

@@ -67,7 +67,7 @@ public class SendBudgetCommandHandlerTests
         repo.Setup(r => r.GetByIdForUpdateAsync(order.Id, It.IsAny<CancellationToken>())).ReturnsAsync(order);
         repo.Setup(r => r.GetByIdAsync(order.Id, It.IsAny<CancellationToken>())).ReturnsAsync(order);
 
-        var notification = new Mock<IBudgetNotificationService>();
+        var notification = new Mock<INotificationService>();
         notification.Setup(n => n.SendBudgetApprovalRequestAsync(
                 customer.Email,
                 order.OrderNumber,
@@ -104,7 +104,7 @@ public class SendBudgetCommandHandlerTests
         var handler = new SendBudgetCommandHandler(
             repo.Object,
             new Mock<IUnitOfWork>().Object,
-            new Mock<IBudgetNotificationService>().Object);
+            new Mock<INotificationService>().Object);
 
         var act = async () => await handler.Handle(new SendBudgetCommand(Guid.NewGuid()), CancellationToken.None);
         await act.Should().ThrowAsync<NotFoundException>();

@@ -61,5 +61,10 @@ public class WrenchBoxApiFactory : WebApplicationFactory<Program>, IAsyncLifetim
         builder.UseSetting("Jwt:Secret", "WrenchBox_Test_Secret_Key_Min_32_Chars!");
         builder.UseSetting("Jwt:Issuer", "WrenchBox");
         builder.UseSetting("Jwt:Audience", "WrenchBox.Admin");
+        builder.UseSetting("Smtp:Host", "");
+        builder.UseSetting("Webhook:Secret", "test-webhook-secret");
+        builder.UseSetting("Seed:Enabled", "true");
+        builder.UseSetting("RateLimiting:Enabled", "false");
+        builder.UseSetting("Swagger:Enabled", "false");
     }
 }

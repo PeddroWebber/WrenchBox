@@ -118,7 +118,7 @@ public class WorkOrderLifecycleHandlerTests
     {
         var order = CreateOrderInStatus(WorkOrderStatus.Received);
         var repo = new Mock<IWorkOrderRepository>();
-        repo.Setup(r => r.GetPagedAsync(1, 20, null, null, It.IsAny<CancellationToken>()))
+        repo.Setup(r => r.GetPagedAsync(1, 20, null, null, false, It.IsAny<CancellationToken>()))
             .ReturnsAsync((new List<WorkOrder> { order }, 1));
 
         var handler = new GetWorkOrdersQueryHandler(repo.Object);

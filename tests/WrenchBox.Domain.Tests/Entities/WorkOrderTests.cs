@@ -98,6 +98,27 @@ public class WorkOrderTests
     }
 
     [Fact]
+    public void RejectBudget_ReturnsToDiagnosis_AndClearsTrackingToken()
+    {
+        var order = CreateWorkOrder();
+        order.StartDiagnosis();
+        order.SendBudgetForApproval();
+
+        order.RejectBudget("Customer");
+
+        order.Status.Should().Be(WorkOrderStatus.InDiagnosis);
+        order.TrackingToken.Should().BeNull();
+    }
+
+    [Fact]
+    public void RejectBudget_FromWrongStatus_Throws()
+    {
+        var order = CreateWorkOrder();
+        var act = () => order.RejectBudget();
+        act.Should().Throw<DomainException>();
+    }
+
+    [Fact]
     public void GetExecutionDuration_ReturnsValue_WhenCompleted()
     {
         var order = CreateWorkOrder();

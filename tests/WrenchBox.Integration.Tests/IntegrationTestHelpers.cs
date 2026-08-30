@@ -1,13 +1,18 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using WrenchBox.Application.DTOs;
 
 namespace WrenchBox.Integration.Tests;
 
 public static class IntegrationTestHelpers
 {
-    public static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+    public static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters = { new JsonStringEnumConverter() }
+    };
 
     public static async Task<HttpClient> CreateAuthenticatedClientAsync(WrenchBoxApiFactory factory)
     {

@@ -15,6 +15,8 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
+        services.Configure<SmtpSettings>(configuration.GetSection(SmtpSettings.SectionName));
+        services.Configure<WebhookSettings>(configuration.GetSection(WebhookSettings.SectionName));
 
         services.AddDbContext<WrenchBoxDbContext>(options =>
             options.UseNpgsql(configuration.GetConnectionString("Default")));
@@ -28,7 +30,9 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IJwtTokenService, JwtTokenService>();
         services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
-        services.AddScoped<IBudgetNotificationService, LoggingBudgetNotificationService>();
+        services.AddScoped<SmtpNotificationService>();
+        services.AddScoped<INotificationService>(sp => sp.GetRequiredService<SmtpNotificationService>());
+        services.AddScoped<IBudgetNotificationService>(sp => sp.GetRequiredService<SmtpNotificationService>());
 
         return services;
     }
