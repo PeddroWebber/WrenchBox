@@ -2,6 +2,10 @@
 
 Backend para gestão de oficinas mecânicas: ordens de serviço, clientes, veículos, catálogo, estoque e acompanhamento do cliente. Usa **Clean Architecture**, **testes automatizados**, **e-mail (MailHog)**, **Docker**, **Kubernetes**, **Terraform (Kind local)** e **CI/CD**.
 
+## Vídeo Fase 2 - TechChallenge FIAP
+
+https://www.youtube.com/watch?v=q-06cQo0kHI
+
 ## Arquitetura
 
 Clean Architecture em camadas (o Domain não depende de Infrastructure):
