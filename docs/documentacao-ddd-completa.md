@@ -48,7 +48,7 @@ Monólito em camadas com DDD:
 | Ator | Papel | Autenticação |
 |------|-------|--------------|
 | **Administrador** | Cadastros, OS, estoque, métricas | JWT (`Authorization: Bearer`) |
-| **Cliente** | Consulta e aprovação de orçamento | Token de acompanhamento (`X-Tracking-Token`) |
+| **Cliente** | Área logada em `/api/v1/me` e decisão pelo link do e-mail | JWT emitido pela função a partir do CPF; o link do orçamento continua com `X-Tracking-Token` |
 | **Sistema** | Número de OS, notificação, histórico | Interno |
 
 ---

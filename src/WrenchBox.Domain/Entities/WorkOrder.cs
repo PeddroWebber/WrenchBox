@@ -149,12 +149,28 @@ public class WorkOrder : Entity
         MarkUpdated();
     }
 
+    public TimeSpan? GetDiagnosisDuration()
+    {
+        if (DiagnosisStartedAt is null || BudgetSentAt is null)
+            return null;
+
+        return BudgetSentAt.Value - DiagnosisStartedAt.Value;
+    }
+
     public TimeSpan? GetExecutionDuration()
     {
         if (ExecutionStartedAt is null || CompletedAt is null)
             return null;
 
         return CompletedAt.Value - ExecutionStartedAt.Value;
+    }
+
+    public TimeSpan? GetFinalizationDuration()
+    {
+        if (CompletedAt is null || DeliveredAt is null)
+            return null;
+
+        return DeliveredAt.Value - CompletedAt.Value;
     }
 
     private void EnsureStatus(WorkOrderStatus expected, string operation)

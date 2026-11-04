@@ -73,6 +73,7 @@ public class CreateWorkOrderCommandHandler : IRequestHandler<CreateWorkOrderComm
     private readonly IPartRepository _partRepository;
     private readonly IWorkOrderRepository _workOrderRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IOperationalMetrics? _metrics;
 
     public CreateWorkOrderCommandHandler(
         ICustomerRepository customerRepository,
@@ -80,7 +81,8 @@ public class CreateWorkOrderCommandHandler : IRequestHandler<CreateWorkOrderComm
         IServiceRepository serviceRepository,
         IPartRepository partRepository,
         IWorkOrderRepository workOrderRepository,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IOperationalMetrics? metrics = null)
     {
         _customerRepository = customerRepository;
         _vehicleRepository = vehicleRepository;
@@ -88,6 +90,7 @@ public class CreateWorkOrderCommandHandler : IRequestHandler<CreateWorkOrderComm
         _partRepository = partRepository;
         _workOrderRepository = workOrderRepository;
         _unitOfWork = unitOfWork;
+        _metrics = metrics;
     }
 
     public async Task<WorkOrderDto> Handle(CreateWorkOrderCommand request, CancellationToken cancellationToken)
@@ -148,6 +151,7 @@ public class CreateWorkOrderCommandHandler : IRequestHandler<CreateWorkOrderComm
 
         await _workOrderRepository.AddAsync(workOrder, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        _metrics.OrNull().WorkOrderOpened();
 
         workOrder = await _workOrderRepository.GetByIdAsync(workOrder.Id, cancellationToken)
             ?? throw new AppException("Failed to load created work order.");
@@ -260,15 +264,18 @@ public class SendBudgetCommandHandler : IRequestHandler<SendBudgetCommand, SendB
     private readonly IWorkOrderRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly INotificationService _notificationService;
+    private readonly IOperationalMetrics? _metrics;
 
     public SendBudgetCommandHandler(
         IWorkOrderRepository repository,
         IUnitOfWork unitOfWork,
-        INotificationService notificationService)
+        INotificationService notificationService,
+        IOperationalMetrics? metrics = null)
     {
         _repository = repository;
         _unitOfWork = unitOfWork;
         _notificationService = notificationService;
+        _metrics = metrics;
     }
 
     public async Task<SendBudgetResponseDto> Handle(SendBudgetCommand request, CancellationToken cancellationToken)
@@ -281,6 +288,10 @@ public class SendBudgetCommandHandler : IRequestHandler<SendBudgetCommand, SendB
 
         var saved = await _repository.GetByIdAsync(request.WorkOrderId, cancellationToken)
             ?? throw new NotFoundException($"Work order '{request.WorkOrderId}' not found.");
+
+        var diagnosis = saved.GetDiagnosisDuration();
+        if (diagnosis is not null)
+            _metrics.OrNull().RecordPhaseDuration("diagnosis", diagnosis.Value.TotalSeconds);
 
         var customerEmail = saved.Customer?.Email ?? string.Empty;
         var notificationSent = false;
@@ -303,15 +314,18 @@ public class CompleteWorkOrderCommandHandler : IRequestHandler<CompleteWorkOrder
     private readonly IWorkOrderRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly INotificationService? _notificationService;
+    private readonly IOperationalMetrics? _metrics;
 
     public CompleteWorkOrderCommandHandler(
         IWorkOrderRepository repository,
         IUnitOfWork unitOfWork,
-        INotificationService? notificationService = null)
+        INotificationService? notificationService = null,
+        IOperationalMetrics? metrics = null)
     {
         _repository = repository;
         _unitOfWork = unitOfWork;
         _notificationService = notificationService;
+        _metrics = metrics;
     }
 
     public async Task<WorkOrderDto> Handle(CompleteWorkOrderCommand request, CancellationToken cancellationToken)
@@ -321,6 +335,9 @@ public class CompleteWorkOrderCommandHandler : IRequestHandler<CompleteWorkOrder
 
         workOrder.Complete("Admin");
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        var execution = workOrder.GetExecutionDuration();
+        if (execution is not null)
+            _metrics.OrNull().RecordPhaseDuration("execution", execution.Value.TotalSeconds);
 
         workOrder = await _repository.GetByIdAsync(request.WorkOrderId, cancellationToken)
             ?? throw new NotFoundException($"Work order '{request.WorkOrderId}' not found.");
@@ -348,15 +365,18 @@ public class DeliverWorkOrderCommandHandler : IRequestHandler<DeliverWorkOrderCo
     private readonly IWorkOrderRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly INotificationService? _notificationService;
+    private readonly IOperationalMetrics? _metrics;
 
     public DeliverWorkOrderCommandHandler(
         IWorkOrderRepository repository,
         IUnitOfWork unitOfWork,
-        INotificationService? notificationService = null)
+        INotificationService? notificationService = null,
+        IOperationalMetrics? metrics = null)
     {
         _repository = repository;
         _unitOfWork = unitOfWork;
         _notificationService = notificationService;
+        _metrics = metrics;
     }
 
     public async Task<WorkOrderDto> Handle(DeliverWorkOrderCommand request, CancellationToken cancellationToken)
@@ -366,6 +386,9 @@ public class DeliverWorkOrderCommandHandler : IRequestHandler<DeliverWorkOrderCo
 
         workOrder.Deliver("Admin");
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        var finalization = workOrder.GetFinalizationDuration();
+        if (finalization is not null)
+            _metrics.OrNull().RecordPhaseDuration("finalization", finalization.Value.TotalSeconds);
 
         workOrder = await _repository.GetByIdAsync(request.WorkOrderId, cancellationToken)
             ?? throw new NotFoundException($"Work order '{request.WorkOrderId}' not found.");

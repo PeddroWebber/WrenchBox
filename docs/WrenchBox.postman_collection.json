@@ -1,12 +1,13 @@
 {
   "info": {
     "name": "WrenchBox API",
-    "description": "Collection: auth, cadastros, OS, tracking, webhook, health e HPA.",
+    "description": "Collection: auth de administrador, área do cliente (JWT por CPF), cadastros, OS, tracking, webhook, health e métricas.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:8080" },
     { "key": "token", "value": "" },
+    { "key": "customerToken", "value": "" },
     { "key": "trackingToken", "value": "" },
     { "key": "workOrderId", "value": "" },
     { "key": "serviceId", "value": "" },
@@ -38,6 +39,30 @@
               "raw": "{\n  \"email\": \"admin@wrenchbox.local\",\n  \"password\": \"Admin@123\"\n}"
             },
             "url": "{{baseUrl}}/api/v1/auth/login"
+          }
+        },
+        {
+          "name": "Customer token (CPF via gateway)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.token) pm.collectionVariables.set('customerToken', body.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cpf\": \"39053344705\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/token",
+            "description": "Rota do API Gateway / função serverless. CPF de demonstração do cliente João Silva (Ativo)."
           }
         }
       ]
@@ -271,7 +296,11 @@
         },
         {
           "name": "HPA load",
-          "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/diagnostics/load?iterations=750000" }
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/v1/diagnostics/load?iterations=750000"
+          }
         },
         {
           "name": "Average execution time",
@@ -279,6 +308,47 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": "{{baseUrl}}/api/v1/metrics/average-execution-time"
+          }
+        },
+        {
+          "name": "Operational metrics",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/v1/metrics/operations"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Customer area",
+      "item": [
+        {
+          "name": "My work orders",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }],
+            "url": "{{baseUrl}}/api/v1/me/work-orders"
+          }
+        },
+        {
+          "name": "My work order status",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }],
+            "url": "{{baseUrl}}/api/v1/me/work-orders/{{workOrderId}}/status"
+          }
+        },
+        {
+          "name": "Decide my budget",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{ \"approved\": true }" },
+            "url": "{{baseUrl}}/api/v1/me/work-orders/{{workOrderId}}/decision"
           }
         }
       ]

@@ -47,6 +47,9 @@ services:
       Smtp__UseSsl: "false"
       Smtp__PublicBaseUrl: ${PUBLIC_BASE_URL:-http://localhost:8080}
       Webhook__Secret: ${WEBHOOK_SECRET:-dev-webhook-secret}
+      Notify__BaseUrl: ${NOTIFY_BASE_URL:-}
+      Notify__ApiKey: ${NOTIFY_API_KEY:-}
+      OpenTelemetry__Prometheus__Enabled: "false"
 
 volumes:
   pgdata:

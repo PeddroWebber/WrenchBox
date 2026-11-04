@@ -12,6 +12,9 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.HasKey(c => c.Id);
         builder.Property(c => c.Document).HasMaxLength(14).IsRequired();
         builder.HasIndex(c => c.Document).IsUnique();
+        builder.Property(c => c.DocumentType).IsRequired();
+        builder.Property(c => c.Status).IsRequired();
+        builder.HasIndex(c => c.Status);
         builder.Property(c => c.Name).HasMaxLength(200).IsRequired();
         builder.Property(c => c.Email).HasMaxLength(200).IsRequired();
         builder.Property(c => c.Phone).HasMaxLength(20);
@@ -66,6 +69,23 @@ public class StockMovementConfiguration : IEntityTypeConfiguration<StockMovement
         builder.ToTable("stock_movements");
         builder.HasKey(sm => sm.Id);
         builder.Property(sm => sm.Reason).HasMaxLength(500).IsRequired();
+        builder.HasOne<WorkOrder>()
+            .WithMany()
+            .HasForeignKey(sm => sm.WorkOrderId)
+            .OnDelete(DeleteBehavior.SetNull);
+    }
+}
+
+public class IntegrationFailureConfiguration : IEntityTypeConfiguration<IntegrationFailure>
+{
+    public void Configure(EntityTypeBuilder<IntegrationFailure> builder)
+    {
+        builder.ToTable("integration_failures");
+        builder.HasKey(f => f.Id);
+        builder.Property(f => f.Integration).HasMaxLength(100).IsRequired();
+        builder.Property(f => f.Reference).HasMaxLength(100);
+        builder.Property(f => f.Detail).HasMaxLength(1000).IsRequired();
+        builder.HasIndex(f => f.OccurredAt);
     }
 }
 
@@ -77,6 +97,12 @@ public class WorkOrderConfiguration : IEntityTypeConfiguration<WorkOrder>
         builder.HasKey(w => w.Id);
         builder.Property(w => w.OrderNumber).HasMaxLength(20).IsRequired();
         builder.HasIndex(w => w.OrderNumber).IsUnique();
+        builder.HasIndex(w => new { w.Status, w.CreatedAt });
+        builder.HasIndex(w => w.DiagnosisStartedAt);
+        builder.HasIndex(w => w.BudgetSentAt);
+        builder.HasIndex(w => w.ExecutionStartedAt);
+        builder.HasIndex(w => w.CompletedAt);
+        builder.HasIndex(w => w.DeliveredAt);
         builder.Property(w => w.TrackingToken).HasMaxLength(64);
         builder.HasIndex(w => w.TrackingToken).IsUnique();
         builder.Property(w => w.TotalAmount).HasPrecision(18, 2);

@@ -12,6 +12,7 @@ Documentação técnica e de domínio do **WrenchBox** — Sistema Integrado de 
 | [Modelagem DDD](modelagem-ddd.md) | Bounded contexts, camadas e diagramas |
 | [Event Storming — Estoque](event-storming-estoque.md) | Fluxo de gestão de peças e insumos |
 | [API — Endpoints](api-endpoints.md) | Referência de todos os endpoints REST |
+| [Arquitetura da Fase 3](arquitetura/README.md) | Componentes, sequências, RFCs, ADRs e modelo ER |
 | [Collection Postman](WrenchBox.postman_collection.json) | Collection das APIs |
 | [Análise de Vulnerabilidades](analise-vulnerabilidades.md) | Revisão de segurança do MVP |
 
@@ -34,5 +35,5 @@ Documentação técnica e de domínio do **WrenchBox** — Sistema Integrado de 
 | Ator | Papel | Autenticação |
 |------|-------|--------------|
 | **Administrador** | Gestão de cadastros, OS, estoque e métricas | JWT Bearer (`Authorization: Bearer <token>`) |
-| **Cliente** | Consulta e aprovação de orçamento | Token de acompanhamento (`X-Tracking-Token`) |
+| **Cliente** | Área logada em `/api/v1/me` e decisão pelo link do e-mail | JWT emitido pela função a partir do CPF; o link do orçamento continua com `X-Tracking-Token` |
 | **Sistema** | Geração de número de OS, notificação de orçamento, histórico | Interno |

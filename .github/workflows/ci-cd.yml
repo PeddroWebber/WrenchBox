@@ -2,9 +2,10 @@ name: CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, homolog]
   pull_request:
-    branches: [main]
+    branches: [main, homolog]
+  workflow_dispatch:
 
 env:
   DOTNET_VERSION: "8.0.x"
@@ -54,47 +55,9 @@ jobs:
         working-directory: infra
         run: terraform validate
 
-  image:
-    name: Build and push Docker image
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      image: ${{ steps.meta.outputs.image }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Image metadata
-        id: meta
-        run: |
-          IMAGE="${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}"
-          IMAGE=$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')
-          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
-          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
-
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ env.IMAGE }}:latest
-            ${{ env.IMAGE }}:${{ github.sha }}
-
-  deploy:
-    name: Deploy to Kind
-    needs: [test, terraform, image]
-    if: always() && needs.test.result == 'success' && needs.terraform.result == 'success'
+  kind:
+    name: Smoke on Kind
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -115,23 +78,25 @@ jobs:
       - name: Load image into Kind
         run: kind load docker-image wrenchbox:latest --name wrenchbox
 
-      - name: Apply namespace, ConfigMap and Secret
+      - name: Apply local dependencies
         run: |
           kubectl apply -f k8s/namespace.yaml
-          kubectl apply -f k8s/configmap.yaml
-          kubectl apply -f k8s/secret.yaml
-
-      - name: Deploy do banco de dados
-        run: kubectl apply -f k8s/postgres-deployment.yaml
+          kubectl apply -f k8s/local/configmap.yaml
+          kubectl -n wrenchbox create secret generic wrenchbox-secret \
+            --from-literal=Jwt__Secret=WrenchBox_Kind_Secret_Key_Min_32_Chars! \
+            --from-literal=Webhook__Secret=dev-webhook-secret \
+            --from-literal=ConnectionStrings__Default='Host=postgres;Port=5432;Database=wrenchbox;Username=postgres;Password=postgres' \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply -f k8s/local/postgres-deployment.yaml
+          kubectl apply -f k8s/local/mailhog-deployment.yaml
 
       - name: Wait for PostgreSQL
         run: kubectl -n wrenchbox rollout status deployment/postgres --timeout=180s
 
-      - name: Aplicar manifestos da API, MailHog e HPA
+      - name: Apply API and HPA
         run: |
-          kubectl apply -f k8s/mailhog-deployment.yaml
-          kubectl apply -f k8s/api-deployment.yaml
-          kubectl apply -f k8s/hpa.yaml
+          kubectl apply -n wrenchbox -f k8s/api-deployment.yaml
+          kubectl apply -n wrenchbox -f k8s/hpa.yaml
 
       - name: Wait for API
         run: kubectl -n wrenchbox rollout status deployment/wrenchbox-api --timeout=180s
@@ -141,4 +106,95 @@ jobs:
           kubectl -n wrenchbox wait --for=condition=ready pod -l app=wrenchbox-api --timeout=180s
           API_POD=$(kubectl -n wrenchbox get pod -l app=wrenchbox-api -o jsonpath='{.items[0].metadata.name}')
           kubectl -n wrenchbox exec "$API_POD" -- curl -fsS http://localhost:8080/health
-          kubectl -n wrenchbox get deploy,svc,hpa,secret,configmap
+
+  image:
+    name: Build and push Docker image
+    needs: test
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/homolog')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Image metadata
+        id: meta
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}"
+          IMAGE=$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ github.ref_name }}
+            ${{ steps.meta.outputs.image }}:${{ github.sha }}
+
+  deploy:
+    name: Deploy to AKS
+    needs: image
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/homolog')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    environment: ${{ github.ref_name == 'main' && 'production' || 'homolog' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Azure deploy settings
+        id: azure
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AKS_CLUSTER_NAME: ${{ vars.AKS_CLUSTER_NAME }}
+        run: |
+          if [ -n "$AZURE_CLIENT_ID" ] && [ -n "$AZURE_TENANT_ID" ] && [ -n "$AZURE_SUBSCRIPTION_ID" ] && [ -n "$AZURE_RESOURCE_GROUP" ] && [ -n "$AKS_CLUSTER_NAME" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Deploy no AKS ignorado. Cadastre os segredos AZURE_CLIENT_ID, AZURE_TENANT_ID e AZURE_SUBSCRIPTION_ID e as variáveis AZURE_RESOURCE_GROUP e AKS_CLUSTER_NAME."
+          fi
+
+      - name: Azure login
+        if: steps.azure.outputs.enabled == 'true'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: AKS credentials
+        if: steps.azure.outputs.enabled == 'true'
+        uses: azure/aks-set-context@v4
+        with:
+          resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          cluster-name: ${{ vars.AKS_CLUSTER_NAME }}
+
+      - name: Rollout
+        if: steps.azure.outputs.enabled == 'true'
+        env:
+          NAMESPACE: ${{ github.ref_name == 'main' && 'wrenchbox-prod' || 'wrenchbox-homolog' }}
+          IMAGE: ${{ needs.image.outputs.image }}:${{ github.sha }}
+        run: |
+          kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply -n "$NAMESPACE" -f k8s/configmap.yaml
+          kubectl apply -n "$NAMESPACE" -f k8s/api-deployment.yaml
+          kubectl apply -n "$NAMESPACE" -f k8s/hpa.yaml
+          kubectl -n "$NAMESPACE" set image deployment/wrenchbox-api api="$IMAGE"
+          kubectl -n "$NAMESPACE" rollout status deployment/wrenchbox-api --timeout=180s

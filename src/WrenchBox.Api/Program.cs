@@ -1,16 +1,27 @@
 using System.Text;
 using System.Text.Json.Serialization;
+using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using WrenchBox.Api.Middleware;
 using WrenchBox.Application;
 using WrenchBox.Infrastructure;
 using WrenchBox.Infrastructure.Auth;
+using WrenchBox.Infrastructure.Observability;
 using WrenchBox.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Logging.AddJsonConsole(options =>
+{
+    options.IncludeScopes = true;
+    options.TimestampFormat = "O";
+});
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -24,6 +35,7 @@ if (string.IsNullOrWhiteSpace(jwtSettings.Secret) || jwtSettings.Secret.Length <
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
+        options.MapInboundClaims = true;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -36,6 +48,26 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             RoleClaimType = System.Security.Claims.ClaimTypes.Role
         };
     });
+
+var telemetry = builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource.AddService("WrenchBox.Api"))
+    .WithTracing(tracing => tracing
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation())
+    .WithMetrics(metrics => metrics
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddRuntimeInstrumentation()
+        .AddMeter(OperationalMetrics.MeterName));
+
+var appInsights = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]
+    ?? builder.Configuration["OpenTelemetry:AzureMonitor:ConnectionString"];
+if (!string.IsNullOrWhiteSpace(appInsights))
+    telemetry.UseAzureMonitor(options => options.ConnectionString = appInsights);
+
+var prometheusEnabled = builder.Configuration.GetValue("OpenTelemetry:Prometheus:Enabled", false);
+if (prometheusEnabled)
+    builder.Services.ConfigureOpenTelemetryMeterProvider(metrics => metrics.AddPrometheusExporter());
 
 builder.Services.AddAuthorization();
 builder.Services.AddRateLimiter(options =>
@@ -59,7 +91,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "WrenchBox API",
         Version = "v1",
-        Description = "Workshop management API — service orders, customers, inventory, e-mail and webhooks."
+        Description = "Workshop management API — service orders, customer CPF access, inventory, notifications and observability."
     });
 
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -69,7 +101,7 @@ builder.Services.AddSwaggerGen(options =>
         Scheme = "bearer",
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "JWT Authorization header for admin endpoints."
+        Description = "JWT for administrators (role Admin) and customers (role Customer, claim customer_id)."
     });
 
     options.AddSecurityDefinition("TrackingToken", new OpenApiSecurityScheme
@@ -95,14 +127,7 @@ builder.Services.AddSwaggerGen(options =>
 var app = builder.Build();
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
-app.Use(async (context, next) =>
-{
-    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
-    context.Response.Headers["X-Frame-Options"] = "DENY";
-    context.Response.Headers["Referrer-Policy"] = "no-referrer";
-    context.Response.Headers["X-Request-Id"] = context.TraceIdentifier;
-    await next();
-});
+app.UseMiddleware<CorrelationMiddleware>();
 
 var swaggerEnabled = app.Environment.IsDevelopment()
     || app.Configuration.GetValue("Swagger:Enabled", false);
@@ -118,6 +143,8 @@ if (app.Configuration.GetValue("RateLimiting:Enabled", true))
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+if (prometheusEnabled)
+    app.MapPrometheusScrapingEndpoint().AllowAnonymous();
 app.MapGet("/health", () => Results.Ok(new { status = "Healthy" }));
 app.MapGet("/health/ready", async (WrenchBoxDbContext db, CancellationToken cancellationToken) =>
 {
