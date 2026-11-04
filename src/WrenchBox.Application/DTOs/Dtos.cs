@@ -3,7 +3,16 @@ using WrenchBox.Domain.Enums;
 
 namespace WrenchBox.Application.DTOs;
 
-public record CustomerDto(Guid Id, string Document, string Name, string Email, string Phone, DateTime CreatedAt);
+public record CustomerDto(
+    Guid Id,
+    string Document,
+    string Name,
+    string Email,
+    string Phone,
+    DateTime CreatedAt,
+    DocumentType DocumentType,
+    CustomerStatus Status,
+    string StatusLabel);
 public record VehicleDto(Guid Id, Guid CustomerId, string Plate, string Brand, string Model, int Year, DateTime CreatedAt);
 public record ServiceDto(Guid Id, string Name, string Description, decimal UnitPrice, int EstimatedDurationMinutes, bool IsActive, DateTime CreatedAt);
 public record PartDto(Guid Id, string Name, string Sku, decimal UnitPrice, int StockQuantity, int MinimumStock, bool IsActive, bool IsBelowMinimumStock, DateTime CreatedAt);
@@ -45,10 +54,21 @@ public record SendBudgetResponseDto(Guid WorkOrderId, string TrackingToken, bool
 public record LoginResponseDto(string Token, DateTime ExpiresAt);
 public record AverageExecutionTimeDto(double AverageMinutes, int CompletedOrdersCount);
 
+public record OperationalMetricsDto(
+    DateTime DayUtc,
+    int OpenedToday,
+    double AverageDiagnosisMinutes,
+    int DiagnosisSampleCount,
+    double AverageExecutionMinutes,
+    int ExecutionSampleCount,
+    double AverageFinalizationMinutes,
+    int FinalizationSampleCount,
+    int IntegrationFailuresToday);
+
 public static class Mappers
 {
     public static CustomerDto ToDto(this Customer c) =>
-        new(c.Id, c.Document, c.Name, c.Email, c.Phone, c.CreatedAt);
+        new(c.Id, c.Document, c.Name, c.Email, c.Phone, c.CreatedAt, c.DocumentType, c.Status, c.Status.ToPortuguese());
 
     public static VehicleDto ToDto(this Vehicle v) =>
         new(v.Id, v.CustomerId, v.Plate, v.Brand, v.Model, v.Year, v.CreatedAt);

@@ -20,4 +20,11 @@ public class MetricsController : ControllerBase
         var result = await _mediator.Send(new GetAverageExecutionTimeQuery(), cancellationToken);
         return Ok(result);
     }
+
+    [HttpGet("operations")]
+    public async Task<IActionResult> GetOperations(CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(new GetOperationalMetricsQuery(), cancellationToken);
+        return Ok(result);
+    }
 }

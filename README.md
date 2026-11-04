@@ -17,25 +17,41 @@ Clean Architecture em camadas (o Domain não depende de Infrastructure):
 flowchart LR
   subgraph clients [Clientes]
     Admin[Admin JWT]
-    Customer[Cliente / e-mail]
-    Pipeline[GitHub Actions]
+    Customer[Cliente CPF]
   end
 
-  subgraph cluster [Kind / Kubernetes]
-    Api[API Deployment + HPA]
-    Pg[PostgreSQL]
-    Mail[MailHog]
-    Api --> Pg
-    Api --> Mail
+  Gateway[API Management]
+  Func[Funcao de autenticacao]
+  subgraph aks [AKS]
+    Api["API Deployment + HPA"]
   end
+  Pg[(PostgreSQL gerenciado)]
+  Monitor[Azure Monitor]
+  Pipeline[GitHub Actions]
 
-  Admin --> Api
-  Customer --> Api
-  Customer --> Mail
-  Pipeline -->|kubectl apply| Api
+  Customer --> Gateway
+  Admin --> Gateway
+  Gateway -->|POST auth token| Func
+  Gateway -->|APIs com JWT| Api
+  Func --> Pg
+  Api --> Pg
+  Api -->|evento de OS| Func
+  Api --> Monitor
+  Pipeline -->|imagem e rollout| Api
 ```
 
-Fluxo de deploy: testes → imagem Docker → Kind no CI (ou Terraform local) → apply de `/k8s` (banco + API + HPA).
+Fluxo de deploy: testes no pull request → imagem no GHCR nas branches `homolog` e `main` → rollout no AKS (`wrenchbox-homolog` ou `wrenchbox-prod`). O cluster, o API Management, o PostgreSQL gerenciado e a função de autenticação vivem nos repositórios separados descritos em [docs/arquitetura/README.md](docs/arquitetura/README.md). O Kind com Postgres em pod e MailHog fica só no ensaio local.
+
+## Fase 3
+
+| Repositório | Onde está agora | Papel |
+|-------------|-----------------|--------|
+| Função serverless | `temp/wrenchbox-serverless` | CPF, status do cliente e JWT; notificações |
+| Kubernetes (Terraform) | `temp/wrenchbox-k8s-infra` | AKS, Traefik, API Management, Azure Monitor |
+| Banco gerenciado (Terraform) | `temp/wrenchbox-db-infra` | PostgreSQL Flexible Server e Key Vault |
+| Esta aplicação | este git | API no Kubernetes |
+
+A pasta `temp/` não entra neste git. Cada pasta vira um repositório próprio. Slides e roteiro do vídeo: `temp/apresentacao`. Página da entrega no portal: `temp/entrega-portal`.
 
 ## APIs de ordem de serviço
 
@@ -43,7 +59,8 @@ Fluxo de deploy: testes → imagem Docker → Kind no CI (ou Terraform local) �
 |-----------|----------|
 | Abertura de OS | `POST /api/v1/work-orders` — devolve `id` e `orderNumber` |
 | Consulta de status | `GET /api/v1/work-orders/{id}/status` — `status` + `statusLabel` em português |
-| Aprovação/recusa de orçamento | `POST /api/v1/tracking/work-orders/decision` `{ "approved": true\|false }` |
+| Aprovação/recusa de orçamento | `POST /api/v1/tracking/work-orders/decision` `{ "approved": true\|false }` ou, com JWT de cliente, `POST /api/v1/me/work-orders/{id}/decision` |
+| Área do cliente | `GET /api/v1/me/work-orders` — exige JWT com role `Customer` emitido em `POST /auth/token` |
 | Listagem operacional | `GET /api/v1/work-orders` — Execução > Aguardando Aprovação > Diagnóstico > Recebida; mais antigas primeiro; exclui Finalizada/Entregue |
 | Status via e-mail | SMTP + MailHog; links no e-mail; `POST /api/v1/webhooks/work-order-status` |
 
@@ -74,15 +91,20 @@ Swagger em http://localhost:5000/swagger.
 
 ## Kubernetes
 
+Os manifestos em `k8s/` descrevem só a API (Deployment, Service ClusterIP e HPA). Postgres e MailHog ficam no Compose e em `k8s/local/` para o Kind. O segredo não é versionado: copie [k8s/secret.yaml.example](k8s/secret.yaml.example).
+
 ```bash
 docker build -t wrenchbox:latest .
 kind create cluster --name wrenchbox --config infra/kind-config.yaml
 kind load docker-image wrenchbox:latest --name wrenchbox
-kubectl apply -k k8s
-kubectl -n wrenchbox get deploy,svc,hpa
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/local/configmap.yaml
+kubectl apply -f k8s/local/postgres-deployment.yaml
+kubectl apply -f k8s/local/mailhog-deployment.yaml
+kubectl apply -n wrenchbox -f k8s/api-deployment.yaml
+kubectl apply -n wrenchbox -f k8s/hpa.yaml
+kubectl -n wrenchbox port-forward svc/wrenchbox-api 8080:8080
 ```
-
-API em http://localhost:8080 (NodePort 30080). MailHog em http://localhost:8025.
 
 ### HPA
 
@@ -110,10 +132,14 @@ kubectl apply -k k8s
 
 Pipeline em [.github/workflows/ci-cd.yml](.github/workflows/ci-cd.yml):
 
-1. `dotnet restore` / `build` / `test`
-2. `terraform init` + `terraform validate`
-3. Build e push da imagem para GHCR (`main`)
-4. Kind no runner: deploy do banco, apply dos manifestos (API/HPA), smoke em `/health`
+1. `dotnet restore` / `build` / `test` em pull request e push
+2. `terraform init` + `terraform validate` do Kind local em `infra/`
+3. Push de `homolog` e `main`: imagem no GHCR e rollout no namespace correspondente do AKS, com login Azure por OIDC
+4. Smoke no Kind só por `workflow_dispatch`
+
+Branches `main` e `homolog` devem estar protegidas, com merge apenas por pull request. O script `temp/publicar-github.ps1` aplica essa proteção e convida `soat-architecture` depois que os quatro repositórios existirem no GitHub.
+
+Segredos do workflow: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`. Variáveis: `AZURE_RESOURCE_GROUP`, `AKS_CLUSTER_NAME`.
 
 ## Produção (hardening)
 

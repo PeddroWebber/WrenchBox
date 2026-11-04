@@ -17,6 +17,7 @@ public class WrenchBoxDbContext : DbContext
     public DbSet<WorkOrderPartItem> WorkOrderPartItems => Set<WorkOrderPartItem>();
     public DbSet<WorkOrderStatusHistory> WorkOrderStatusHistories => Set<WorkOrderStatusHistory>();
     public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
+    public DbSet<IntegrationFailure> IntegrationFailures => Set<IntegrationFailure>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

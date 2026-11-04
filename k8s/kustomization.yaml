@@ -4,8 +4,5 @@ namespace: wrenchbox
 resources:
   - namespace.yaml
   - configmap.yaml
-  - secret.yaml
-  - postgres-deployment.yaml
-  - mailhog-deployment.yaml
   - api-deployment.yaml
   - hpa.yaml

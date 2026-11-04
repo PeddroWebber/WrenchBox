@@ -1,5 +1,6 @@
 using FluentAssertions;
 using WrenchBox.Domain.Entities;
+using WrenchBox.Domain.Enums;
 using WrenchBox.Domain.Exceptions;
 
 namespace WrenchBox.Domain.Tests.Entities;
@@ -11,7 +12,28 @@ public class CustomerTests
     {
         var customer = Customer.Create("39053344705", "Jane", "jane@test.com", "11999999999");
         customer.Document.Should().Be("39053344705");
+        customer.DocumentType.Should().Be(DocumentType.Cpf);
+        customer.Status.Should().Be(CustomerStatus.Active);
+        customer.CanAuthenticate().Should().BeTrue();
         customer.Name.Should().Be("Jane");
+    }
+
+    [Fact]
+    public void ChangeStatus_Inactive_CannotAuthenticate()
+    {
+        var customer = Customer.Create("39053344705", "Jane", "jane@test.com", "");
+        customer.ChangeStatus(CustomerStatus.Inactive);
+        customer.Status.Should().Be(CustomerStatus.Inactive);
+        customer.CanAuthenticate().Should().BeFalse();
+    }
+
+    [Fact]
+    public void ChangeStatus_Blocked_CannotAuthenticate()
+    {
+        var customer = Customer.Create("39053344705", "Jane", "jane@test.com", "");
+        customer.ChangeStatus(CustomerStatus.Blocked);
+        customer.CanAuthenticate().Should().BeFalse();
+        customer.Status.ToPortuguese().Should().Be("Bloqueado");
     }
 
     [Fact]

@@ -253,6 +253,24 @@ public class WorkOrderRepository : IWorkOrderRepository
             .Where(w => w.ExecutionStartedAt != null && w.CompletedAt != null)
             .ToListAsync(cancellationToken);
 
+    public async Task<WorkOrder?> GetByIdWithPartsForUpdateAsync(Guid id, CancellationToken cancellationToken = default) =>
+        await _context.WorkOrders
+            .Include(w => w.PartItems)
+            .Include(w => w.Customer)
+            .FirstOrDefaultAsync(w => w.Id == id, cancellationToken);
+
+    public async Task<IReadOnlyList<WorkOrderTiming>> ListTimingsAsync(CancellationToken cancellationToken = default) =>
+        await _context.WorkOrders
+            .AsNoTracking()
+            .Select(w => new WorkOrderTiming(
+                w.CreatedAt,
+                w.DiagnosisStartedAt,
+                w.BudgetSentAt,
+                w.ExecutionStartedAt,
+                w.CompletedAt,
+                w.DeliveredAt))
+            .ToListAsync(cancellationToken);
+
     public async Task AddAsync(WorkOrder workOrder, CancellationToken cancellationToken = default) =>
         await _context.WorkOrders.AddAsync(workOrder, cancellationToken);
 
@@ -261,6 +279,19 @@ public class WorkOrderRepository : IWorkOrderRepository
         if (_context.Entry(workOrder).State == EntityState.Detached)
             _context.WorkOrders.Update(workOrder);
     }
+}
+
+public class IntegrationFailureRepository : IIntegrationFailureRepository
+{
+    private readonly WrenchBoxDbContext _context;
+
+    public IntegrationFailureRepository(WrenchBoxDbContext context) => _context = context;
+
+    public async Task AddAsync(IntegrationFailure failure, CancellationToken cancellationToken = default) =>
+        await _context.IntegrationFailures.AddAsync(failure, cancellationToken);
+
+    public Task<int> CountSinceAsync(DateTime utcFrom, CancellationToken cancellationToken = default) =>
+        _context.IntegrationFailures.CountAsync(f => f.OccurredAt >= utcFrom, cancellationToken);
 }
 
 public class AdminUserRepository : IAdminUserRepository

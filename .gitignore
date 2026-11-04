@@ -57,3 +57,9 @@ Thumbs.db
 *.db
 *.db-shm
 *.db-wal
+
+# Local Kubernetes secret (use k8s/secret.yaml.example)
+k8s/secret.yaml
+
+# Separate delivery repositories and presentation assets
+temp/

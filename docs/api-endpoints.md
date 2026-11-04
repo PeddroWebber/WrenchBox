@@ -11,6 +11,7 @@ Documentação interativa: `/swagger`
 |---------|-------------|
 | 🔓 | Público (sem autenticação) |
 | 🔐 | JWT Bearer — header `Authorization: Bearer <token>` (role `Admin`) |
+| 👤 | JWT Bearer do cliente — role `Customer` e claim `customer_id` (emitido pela função de CPF) |
 | 🎫 | Token de acompanhamento — header `X-Tracking-Token: <token>` |
 
 ---
@@ -29,6 +30,40 @@ Autentica administrador e retorna JWT.
 **Resposta 200:** `{ "token": "...", "expiresAt": "..." }`
 
 **Erros:** 401 credenciais inválidas; 400 validação.
+
+### `POST /auth/token` 🔓
+
+Rota do API Gateway (não da API). A função serverless valida o CPF, consulta existência e status do cliente e devolve um JWT de cliente. O CPF não entra no token.
+
+| Campo | Tipo | Obrigatório | Descrição |
+|-------|------|-------------|-----------|
+| `cpf` | string | Sim | CPF do cliente, com ou sem máscara |
+
+**Resposta 200:** `{ "token": "...", "expiresAt": "...", "tokenType": "Bearer" }`
+
+**Erro 401:** mensagem genérica. O motivo (CPF inválido, inexistente, inativo ou bloqueado) fica só no log estruturado.
+
+Cliente de demonstração, com seed ligado: CPF `39053344705` (João Silva, Ativo). CPF `11144477735` (Maria Santos, Inativo) autentica com falha.
+
+---
+
+## Área do cliente
+
+Base: `/me/work-orders` 👤
+
+O cliente só enxerga as próprias ordens. Ordem de outro cliente responde 404.
+
+### `GET /me/work-orders`
+
+Lista paginada, inclusive ordens finalizadas e entregues.
+
+### `GET /me/work-orders/{id}/status`
+
+Retorna `status` e `statusLabel`.
+
+### `POST /me/work-orders/{id}/decision`
+
+Corpo: `{ "approved": true | false }`. Aprova ou recusa o orçamento da própria ordem.
 
 ---
 
@@ -415,7 +450,7 @@ Atualiza o status da OS a partir de uma ferramenta externa (ex.: clique em e-mai
 |----------|------|-----|
 | `GET /health` | 🔓 | Liveness (K8s) |
 | `GET /health/ready` | 🔓 | Readiness (PostgreSQL) |
-| `GET /api/v1/diagnostics/load` | 🔓 | Carga sintética para demonstrar HPA |
+| `GET /api/v1/diagnostics/load` | 🔐 | Carga sintética para demonstrar HPA. Fora do gateway público. |
 
 ---
 
@@ -438,6 +473,10 @@ Retorna estatísticas de tempo de execução das OS finalizadas.
 
 Calculado com base em `ExecutionStartedAt` e `CompletedAt`.
 
+### `GET /metrics/operations`
+
+Volume do dia (UTC), tempo médio de Diagnóstico (`DiagnosisStartedAt` → `BudgetSentAt`), Execução (`ExecutionStartedAt` → `CompletedAt`) e Finalização (`CompletedAt` → `DeliveredAt`), e a quantidade de falhas de integração registradas no dia.
+
 ---
 
 ## Resumo por método HTTP
@@ -445,6 +484,10 @@ Calculado com base em `ExecutionStartedAt` e `CompletedAt`.
 | Recurso | GET | POST | PUT | PATCH | DELETE |
 |---------|-----|------|-----|-------|--------|
 | `/auth/login` | — | ✅ | — | — | — |
+| `/auth/token` (gateway) | — | ✅ | — | — | — |
+| `/me/work-orders` | ✅ lista | — | — | — | — |
+| `/me/work-orders/{id}/status` | ✅ | — | — | — | — |
+| `/me/work-orders/{id}/decision` | — | ✅ | — | — | — |
 | `/customers` | ✅ lista | ✅ | — | — | — |
 | `/customers/{id}` | ✅ | — | ✅ | — | ✅ |
 | `/vehicles` | ✅ lista | ✅ | — | — | — |
@@ -467,3 +510,4 @@ Calculado com base em `ExecutionStartedAt` e `CompletedAt`.
 | `/tracking/work-orders/decision` | ✅ e-mail | ✅ | — | — | — |
 | `/webhooks/work-order-status` | — | ✅ | — | — | — |
 | `/metrics/average-execution-time` | ✅ | — | — | — | — |
+| `/metrics/operations` | ✅ | — | — | — | — |

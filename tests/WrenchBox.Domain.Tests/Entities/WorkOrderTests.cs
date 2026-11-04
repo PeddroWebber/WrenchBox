@@ -64,6 +64,9 @@ public class WorkOrderTests
 
         order.Deliver();
         order.Status.Should().Be(WorkOrderStatus.Delivered);
+        order.GetDiagnosisDuration().Should().NotBeNull();
+        order.GetExecutionDuration().Should().NotBeNull();
+        order.GetFinalizationDuration().Should().NotBeNull();
     }
 
     [Fact]

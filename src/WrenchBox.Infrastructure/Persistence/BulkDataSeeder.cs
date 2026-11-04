@@ -59,6 +59,8 @@ internal static class BulkDataSeeder
         await context.SaveChangesAsync(cancellationToken);
         logger.LogInformation("Criados {Count} clientes com {VehicleCount} veículos",
             customers.Count, customers.Sum(c => c.Vehicles.Count));
+        logger.LogInformation(
+            "Cliente de demonstração ativo: CPF 39053344705 (João Silva). Cliente inativo: CPF 11144477735 (Maria Santos).");
 
         context.ChangeTracker.Clear();
 
@@ -204,6 +206,7 @@ internal static class BulkDataSeeder
         customers.Add(joao);
 
         var maria = Customer.Create("11144477735", "Maria Santos", "maria@example.com", "11988887777");
+        maria.ChangeStatus(CustomerStatus.Inactive);
         maria.AddVehicle("GHI3J45", "Fiat", "Uno", 2019);
         customers.Add(maria);
 

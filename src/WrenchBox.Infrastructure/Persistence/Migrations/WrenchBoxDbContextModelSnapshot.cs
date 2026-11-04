@@ -67,6 +67,9 @@ namespace WrenchBox.Infrastructure.Persistence.Migrations
                         .HasMaxLength(14)
                         .HasColumnType("character varying(14)");
 
+                    b.Property<int>("DocumentType")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -82,6 +85,9 @@ namespace WrenchBox.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -90,7 +96,39 @@ namespace WrenchBox.Infrastructure.Persistence.Migrations
                     b.HasIndex("Document")
                         .IsUnique();
 
+                    b.HasIndex("Status");
+
                     b.ToTable("customers", (string)null);
+                });
+
+            modelBuilder.Entity("WrenchBox.Domain.Entities.IntegrationFailure", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Detail")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Integration")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OccurredAt");
+
+                    b.ToTable("integration_failures", (string)null);
                 });
 
             modelBuilder.Entity("WrenchBox.Domain.Entities.Part", b =>
@@ -203,6 +241,8 @@ namespace WrenchBox.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("PartId");
 
+                    b.HasIndex("WorkOrderId");
+
                     b.ToTable("stock_movements", (string)null);
                 });
 
@@ -307,7 +347,17 @@ namespace WrenchBox.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("BudgetSentAt");
+
+                    b.HasIndex("CompletedAt");
+
                     b.HasIndex("CustomerId");
+
+                    b.HasIndex("DeliveredAt");
+
+                    b.HasIndex("DiagnosisStartedAt");
+
+                    b.HasIndex("ExecutionStartedAt");
 
                     b.HasIndex("OrderNumber")
                         .IsUnique();
@@ -316,6 +366,8 @@ namespace WrenchBox.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.HasIndex("VehicleId");
+
+                    b.HasIndex("Status", "CreatedAt");
 
                     b.ToTable("work_orders", (string)null);
                 });
@@ -423,6 +475,11 @@ namespace WrenchBox.Infrastructure.Persistence.Migrations
                         .HasForeignKey("PartId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("WrenchBox.Domain.Entities.WorkOrder", null)
+                        .WithMany()
+                        .HasForeignKey("WorkOrderId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("WrenchBox.Domain.Entities.Vehicle", b =>

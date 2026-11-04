@@ -5,7 +5,7 @@ namespace WrenchBox.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/diagnostics")]
-[AllowAnonymous]
+[Authorize(Roles = "Admin")]
 public class DiagnosticsController : ControllerBase
 {
     [HttpGet("load")]

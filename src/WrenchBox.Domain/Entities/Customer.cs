@@ -1,4 +1,5 @@
 using WrenchBox.Domain.Common;
+using WrenchBox.Domain.Enums;
 using WrenchBox.Domain.Exceptions;
 using WrenchBox.Domain.ValueObjects;
 
@@ -7,6 +8,8 @@ namespace WrenchBox.Domain.Entities;
 public class Customer : Entity
 {
     public string Document { get; private set; } = string.Empty;
+    public DocumentType DocumentType { get; private set; }
+    public CustomerStatus Status { get; private set; } = CustomerStatus.Active;
     public string Name { get; private set; } = string.Empty;
     public string Email { get; private set; } = string.Empty;
     public string Phone { get; private set; } = string.Empty;
@@ -29,11 +32,21 @@ public class Customer : Entity
         return new Customer
         {
             Document = doc.Value,
+            DocumentType = doc.Type,
+            Status = CustomerStatus.Active,
             Name = name.Trim(),
             Email = email.Trim().ToLowerInvariant(),
             Phone = phone?.Trim() ?? string.Empty
         };
     }
+
+    public void ChangeStatus(CustomerStatus status)
+    {
+        Status = status;
+        MarkUpdated();
+    }
+
+    public bool CanAuthenticate() => Status == CustomerStatus.Active;
 
     public void Update(string name, string email, string phone)
     {
