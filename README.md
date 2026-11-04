@@ -1,6 +1,6 @@
 # WrenchBox API
 
-Backend para gestão de oficinas mecânicas: ordens de serviço, clientes, veículos, catálogo, estoque e acompanhamento do cliente. Usa **Clean Architecture**, **testes automatizados**, **e-mail (MailHog)**, **Docker**, **Kubernetes**, **Terraform (Kind local)** e **CI/CD**.
+Backend para gestão de oficinas mecânicas: ordens de serviço, clientes, veículos, catálogo, estoque e a área do cliente. A API roda no AKS, autentica administrador e cliente por JWT e publica a imagem pelo GitHub Actions. O desenho segue Clean Architecture, com testes automatizados. O Kind, o Postgres em pod e o MailHog existem só para o ensaio local.
 
 ## Arquitetura
 
@@ -134,7 +134,7 @@ Pipeline em [.github/workflows/ci-cd.yml](.github/workflows/ci-cd.yml):
 
 1. `dotnet restore` / `build` / `test` em pull request e push
 2. `terraform init` + `terraform validate` do Kind local em `infra/`
-3. Push de `homolog` e `main`: imagem no GHCR e rollout no namespace correspondente do AKS, com login Azure por OIDC
+3. Push de `homolog` e `main`: imagem no GHCR. O rollout no AKS só roda quando os segredos OIDC e as variáveis do cluster estão cadastrados; sem eles o job avisa e segue, em vez de falhar no login
 4. Smoke no Kind só por `workflow_dispatch`
 
 Branches `main` e `homolog` devem estar protegidas, com merge apenas por pull request. O script `temp/publicar-github.ps1` aplica essa proteção e convida `soat-architecture` depois que os quatro repositórios existirem no GitHub.

@@ -2,11 +2,11 @@
 
 ## Justificativa
 
-O WrenchBox já modela a oficina como um conjunto de agregados relacionais: cliente, veículo, ordem de serviço, itens, histórico e estoque. Uma OS aprova orçamento e baixa estoque na mesma transação. PostgreSQL entrega essa transação, integridade referencial, constraints e índices com um custo previsível.
+A oficina já está modelada como um conjunto de agregados que se relacionam: cliente, veículo, ordem de serviço, itens, histórico e estoque. Aprovar um orçamento e baixar o estoque acontece na mesma transação. O PostgreSQL entrega essa transação, a integridade referencial, as constraints e os índices, com um custo previsível.
 
-Nesta fase o banco deixa de ser um pod e passa a ser o **Azure Database for PostgreSQL Flexible Server**, versão 16, a mesma major já usada no Compose e nos testes com Testcontainers. O serviço gerenciado cobre backup, TLS obrigatório, firewall e uma operação que não depende do ciclo de vida do cluster.
+Nesta fase o banco deixa de viver num pod e passa a ser o Azure Database for PostgreSQL Flexible Server, versão 16. É a mesma versão maior já usada no Compose e nos testes com Testcontainers. O serviço gerenciado cobre backup, TLS obrigatório e firewall, e a operação do banco não depende do ciclo de vida do cluster.
 
-Ajustes deste incremento:
+Os ajustes deste incremento são estes:
 
 - `customers.document_type` e `customers.status` (Ativo, Inativo, Bloqueado). A função de autenticação precisa dos dois sem reimplementar a regra só na aplicação.
 - Índice único de documento permanece. Índice em `status` apoia a consulta da função e relatórios.

@@ -35,5 +35,5 @@ Documentação técnica e de domínio do **WrenchBox** — Sistema Integrado de 
 | Ator | Papel | Autenticação |
 |------|-------|--------------|
 | **Administrador** | Gestão de cadastros, OS, estoque e métricas | JWT Bearer (`Authorization: Bearer <token>`) |
-| **Cliente** | Consulta e aprovação de orçamento | Token de acompanhamento (`X-Tracking-Token`) |
+| **Cliente** | Área logada em `/api/v1/me` e decisão pelo link do e-mail | JWT emitido pela função a partir do CPF; o link do orçamento continua com `X-Tracking-Token` |
 | **Sistema** | Geração de número de OS, notificação de orçamento, histórico | Interno |

@@ -155,7 +155,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check Azure deploy settings
+        id: azure
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AKS_CLUSTER_NAME: ${{ vars.AKS_CLUSTER_NAME }}
+        run: |
+          if [ -n "$AZURE_CLIENT_ID" ] && [ -n "$AZURE_TENANT_ID" ] && [ -n "$AZURE_SUBSCRIPTION_ID" ] && [ -n "$AZURE_RESOURCE_GROUP" ] && [ -n "$AKS_CLUSTER_NAME" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Deploy no AKS ignorado. Cadastre os segredos AZURE_CLIENT_ID, AZURE_TENANT_ID e AZURE_SUBSCRIPTION_ID e as variáveis AZURE_RESOURCE_GROUP e AKS_CLUSTER_NAME."
+          fi
+
       - name: Azure login
+        if: steps.azure.outputs.enabled == 'true'
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -163,12 +180,14 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: AKS credentials
+        if: steps.azure.outputs.enabled == 'true'
         uses: azure/aks-set-context@v4
         with:
           resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
           cluster-name: ${{ vars.AKS_CLUSTER_NAME }}
 
       - name: Rollout
+        if: steps.azure.outputs.enabled == 'true'
         env:
           NAMESPACE: ${{ github.ref_name == 'main' && 'wrenchbox-prod' || 'wrenchbox-homolog' }}
           IMAGE: ${{ needs.image.outputs.image }}:${{ github.sha }}

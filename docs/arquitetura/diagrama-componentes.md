@@ -1,6 +1,6 @@
 # Diagrama de componentes
 
-A oficina passa a ter uma borda única, uma função de identidade, a API no Kubernetes e um PostgreSQL gerenciado. O mesmo desenho existe em menor escala no Compose de demonstração (`temp/wrenchbox-local-demo`), com Traefik no lugar do API Management e Grafana no lugar do Azure Monitor.
+A oficina passa a ter uma borda única. O cliente e o administrador falam com o gateway. A função cuida da identidade e do e-mail. A API roda no Kubernetes e persiste no PostgreSQL gerenciado. O mesmo desenho existe, em menor escala, no Compose de demonstração (`temp/wrenchbox-local-demo`): lá o Traefik ocupa o lugar do API Management e o Grafana ocupa o lugar do Azure Monitor.
 
 ```mermaid
 flowchart LR

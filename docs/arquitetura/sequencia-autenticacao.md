@@ -1,6 +1,6 @@
 # Sequência — autenticação por CPF
 
-O cliente não envia senha. A função confere o algoritmo do CPF, a linha em `customers` e o status. Só um cliente Ativo recebe token. A resposta de erro é sempre a mesma; o motivo vai para o log.
+O cliente não escolhe senha. Ele informa o CPF. A função confere os dígitos, procura a linha em `customers` e lê o status. Só um cliente Ativo recebe token. Se o CPF é inválido, se não existe ou se o cliente está inativo ou bloqueado, a resposta é sempre a mesma. O motivo fica no log, junto do trace id, para o operador.
 
 ```mermaid
 sequenceDiagram
@@ -27,4 +27,4 @@ sequenceDiagram
   API-->>Cliente: somente as ordens daquele cliente
 ```
 
-O administrador continua em `POST /api/v1/auth/login`. O gateway deixa essa rota aberta e exige role `Admin` no restante de `/api/v1`, exceto acompanhamento por e-mail e webhook, que têm segredo próprio.
+O administrador continua entrando em `POST /api/v1/auth/login`, com e-mail e senha. O gateway deixa essa rota aberta e exige o papel `Admin` no restante de `/api/v1`. O acompanhamento pelo link do e-mail e o webhook ficam de fora dessa regra: cada um tem o próprio segredo.

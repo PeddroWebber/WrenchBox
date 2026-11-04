@@ -1,6 +1,6 @@
 # Arquitetura da Fase 3
 
-Documentação exigida pelo Tech Challenge: visão de nuvem, fluxos, decisões e modelo de dados.
+Esta pasta reúne a visão de operação da oficina: como os componentes se falam, como o cliente entra, como uma ordem nasce e quais decisões ficaram registradas. Os diagramas abaixo são a referência para o deploy e para a apresentação.
 
 | Documento | Conteúdo |
 |-----------|----------|
@@ -18,6 +18,6 @@ Documentação exigida pelo Tech Challenge: visão de nuvem, fluxos, decisões e
 | [ADR 005](adr/005-snapshot-itens.md) | Itens da OS |
 | [ADR 006](adr/006-namespaces-compartilhados.md) | Homologação e produção |
 
-Swagger da API: `http://localhost:8080/swagger` (local) e a URL do API Management depois do deploy. Collection: [../WrenchBox.postman_collection.json](../WrenchBox.postman_collection.json).
+O Swagger da API fica em `http://localhost:8080/swagger` no ensaio local e na URL do API Management depois do deploy. A collection está em [../WrenchBox.postman_collection.json](../WrenchBox.postman_collection.json).
 
-Ordem de apply na Azure: banco → função → Kubernetes e API Management → esta aplicação.
+Na Azure, a ordem de apply é banco, depois a função, depois Kubernetes e API Management, e por último esta aplicação.
